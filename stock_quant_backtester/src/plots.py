@@ -72,13 +72,13 @@ def create_plots(
 
         averages = (
             holdings.groupby("date")[
-                ["consensus_upside", "news_sentiment_7d", "distance_to_30d_high", "future_5d_return"]
+                ["consensus_upside", "relative_strength_21d", "distance_to_30d_high", "future_return_used"]
             ]
             .mean(numeric_only=True)
             .reset_index()
         )
         fig, ax = plt.subplots(figsize=(10, 6))
-        for column in ["consensus_upside", "news_sentiment_7d", "distance_to_30d_high"]:
+        for column in ["consensus_upside", "relative_strength_21d", "distance_to_30d_high"]:
             if column in averages:
                 ax.plot(averages["date"], averages[column], label=column)
         ax.set_title("Average Feature Values of Selected Stocks")

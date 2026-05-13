@@ -119,15 +119,30 @@ def build_feature_panel(
         price_features.groupby("ticker")["volume"].transform(lambda s: s.shift(1).rolling(21).mean())
     )
     price_features["volume_spike_ratio"] = price_features["volume"] / price_features["volume_avg_21d"]
+    price_features["dollar_volume"] = price_features["adjusted_close"] * price_features["volume"]
+    price_features["avg_dollar_volume_21d"] = (
+        price_features.groupby("ticker")["dollar_volume"].transform(lambda s: s.shift(1).rolling(21).mean())
+    )
 
     benchmark = (
         price_features.loc[price_features["ticker"] == benchmark_ticker, ["date", "return_21d", "adjusted_close"]]
-        .rename(columns={"return_21d": "spy_return_21d", "adjusted_close": "spy_adjusted_close"})
+        .rename(
+            columns={
+                "return_21d": "spy_return_21d",
+                "adjusted_close": "spy_adjusted_close",
+            }
+        )
         .sort_values("date")
     )
+    benchmark["spy_close"] = benchmark["spy_adjusted_close"]
+    benchmark["spy_sma_200"] = benchmark["spy_adjusted_close"].rolling(200).mean()
+    benchmark["spy_above_sma_200"] = benchmark["spy_adjusted_close"] > benchmark["spy_sma_200"]
     benchmark["future_5d_spy_return"] = benchmark["spy_adjusted_close"].shift(-5) / benchmark["spy_adjusted_close"] - 1
     benchmark["future_21d_spy_return"] = (
         benchmark["spy_adjusted_close"].shift(-21) / benchmark["spy_adjusted_close"] - 1
+    )
+    benchmark["future_63d_spy_return"] = (
+        benchmark["spy_adjusted_close"].shift(-63) / benchmark["spy_adjusted_close"] - 1
     )
 
     features = price_features.merge(benchmark, on="date", how="left")
@@ -138,8 +153,12 @@ def build_feature_panel(
     features["future_21d_return"] = (
         features.groupby("ticker")["adjusted_close"].shift(-21) / features["adjusted_close"] - 1
     )
+    features["future_63d_return"] = (
+        features.groupby("ticker")["adjusted_close"].shift(-63) / features["adjusted_close"] - 1
+    )
     features["future_5d_excess_return"] = features["future_5d_return"] - features["future_5d_spy_return"]
     features["future_21d_excess_return"] = features["future_21d_return"] - features["future_21d_spy_return"]
+    features["future_63d_excess_return"] = features["future_63d_return"] - features["future_63d_spy_return"]
 
     features = _merge_sentiment(features, sentiment_df)
     features["news_sentiment_7d"] = (
@@ -169,6 +188,8 @@ def build_feature_panel(
         "close",
         "adjusted_close",
         "volume",
+        "dollar_volume",
+        "avg_dollar_volume_21d",
         "return_5d",
         "return_21d",
         "relative_strength_21d",
@@ -194,14 +215,20 @@ def build_feature_panel(
         "target_spread",
         "target_revision_7d",
         "target_revision_30d",
+        "spy_close",
+        "spy_sma_200",
+        "spy_above_sma_200",
         "future_5d_return",
         "future_21d_return",
+        "future_63d_return",
         "future_5d_spy_return",
         "future_21d_spy_return",
+        "future_63d_spy_return",
         "future_5d_excess_return",
         "future_21d_excess_return",
+        "future_63d_excess_return",
+        "analyst_data_mode",
     ]
     features = features[final_columns].sort_values(["date", "ticker"]).reset_index(drop=True)
     save_dataframe(output_path, features)
     return features
-

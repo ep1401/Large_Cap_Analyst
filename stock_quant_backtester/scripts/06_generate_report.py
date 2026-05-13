@@ -11,36 +11,45 @@ from src.config import Config
 from src.utils import load_dataframe
 
 
+IMPORTANT_CAVEAT = (
+    "Important caveat: analyst-driven results currently use FMP data as a current snapshot merged "
+    "across historical dates unless true point-in-time analyst history is provided. These results "
+    "should be treated as research exploration, not a valid historical analyst-signal backtest."
+)
+
+
 def _format_pct(value: float) -> str:
     return f"{value:.2%}"
 
 
 def _dataframe_to_markdown(df: pd.DataFrame) -> str:
     headers = list(df.columns)
-    rows = [headers]
-    for _, row in df.iterrows():
-        formatted = []
-        for value in row.tolist():
-            if isinstance(value, float):
-                formatted.append(f"{value:.6f}")
-            else:
-                formatted.append(str(value))
-        rows.append(formatted)
-    widths = [max(len(str(row[idx])) for row in rows) for idx in range(len(headers))]
-    header_line = "| " + " | ".join(str(headers[idx]).ljust(widths[idx]) for idx in range(len(headers))) + " |"
+    widths = [max(len(str(header)), *(len(str(value)) for value in df[header].tolist())) for header in headers]
+    header_line = "| " + " | ".join(str(header).ljust(widths[idx]) for idx, header in enumerate(headers)) + " |"
     separator = "| " + " | ".join("-" * widths[idx] for idx in range(len(headers))) + " |"
-    body_lines = [
-        "| " + " | ".join(str(row[idx]).ljust(widths[idx]) for idx in range(len(headers))) + " |"
-        for row in rows[1:]
-    ]
-    return "\n".join([header_line, separator, *body_lines])
+    body = []
+    for _, row in df.iterrows():
+        body.append(
+            "| " + " | ".join(str(row[header]).ljust(widths[idx]) for idx, header in enumerate(headers)) + " |"
+        )
+    return "\n".join([header_line, separator, *body])
 
 
 def main() -> None:
     config = Config.from_env()
     comparison = load_dataframe(config.tables_dir / "strategy_comparison.csv")
+    weekly = load_dataframe(config.tables_dir / "weekly_portfolio_returns.csv", parse_dates=["date"])
+    holdings = load_dataframe(config.tables_dir / "weekly_holdings.csv", parse_dates=["date"])
     features = load_dataframe(config.final_dir / "features_panel.csv", parse_dates=["date"])
     chart_paths = sorted(path.name for path in Path(config.charts_dir).glob("*.png"))
+
+    analyst_mode = (
+        features["analyst_data_mode"].dropna().iloc[0]
+        if "analyst_data_mode" in features.columns and features["analyst_data_mode"].notna().any()
+        else "historical_backtest_without_analyst"
+    )
+    full_model_row = comparison.loc[comparison["strategy_name"] == "full_model"].iloc[0]
+    under_diversified = float(full_model_row["average_selected_count"]) < 3
 
     lines = [
         "# Backtest Summary",
@@ -49,36 +58,61 @@ def main() -> None:
         f"- Start date: {config.start_date}",
         f"- End date: {config.end_date}",
         f"- Benchmark: {config.benchmark}",
-        f"- Initial capital: {config.initial_capital}",
-        f"- Top N: {config.top_n}",
+        f"- Holding period days: {int(full_model_row['holding_period_days'])}",
+        f"- Top N: {int(full_model_row['top_n'])}",
         f"- Transaction cost bps: {config.transaction_cost_bps}",
+        f"- Regime filter enabled: {bool(full_model_row['use_regime_filter'])}",
+        f"- Regime exposure when blocked: {full_model_row['regime_exposure']}",
+        f"- Analyst count threshold: {int(full_model_row['analyst_count_threshold'])}",
+        f"- Minimum avg dollar volume: {full_model_row['min_avg_dollar_volume']}",
+        "",
+        "## Analyst Data Mode",
+        f"- Analyst data mode: {analyst_mode}",
+        f"- Point-in-time analyst history available: {analyst_mode != 'research_current_snapshot'}",
+        f'- {IMPORTANT_CAVEAT}',
         "",
         "## Dataset Summary",
-        f"- Universe size: {features['ticker'].nunique()}",
+        f"- Universe size including benchmark rows: {features['ticker'].nunique()}",
         f"- Feature rows: {len(features)}",
         f"- Feature date range: {features['date'].min().date()} to {features['date'].max().date()}",
         "",
         "## Strategy Comparison",
         "",
-        _dataframe_to_markdown(comparison),
+        _dataframe_to_markdown(comparison.round(6)),
         "",
-        "## Best Strategy Snapshot",
+        "## Full Model Snapshot",
+        f"- Average number of holdings: {full_model_row['average_selected_count']:.2f}",
+        f"- Average turnover: {full_model_row['average_turnover']:.2f}",
+        f"- Number of invested periods: {int(full_model_row['number_of_invested_periods'])}",
+        f"- Annualized return: {_format_pct(full_model_row['annualized_return'])}",
+        f"- Excess total return vs SPY: {_format_pct(full_model_row['excess_total_return'])}",
+        f"- Sharpe ratio: {full_model_row['sharpe_ratio']:.2f}",
+        f"- Max drawdown: {_format_pct(full_model_row['max_drawdown'])}",
     ]
 
-    best = comparison.iloc[0]
+    if under_diversified:
+        lines.extend(
+            [
+                "",
+                "## Warning",
+                "- The average selected count is very low, so the strategy appears under-diversified under the current settings.",
+            ]
+        )
+
     lines.extend(
         [
-            f"- Best annualized return: {best['strategy_name']} at {_format_pct(best['annualized_return'])}",
-            f"- Total return: {_format_pct(best['total_return'])}",
-            f"- Excess total return vs SPY: {_format_pct(best['excess_total_return'])}",
-            f"- Sharpe ratio: {best['sharpe_ratio']:.2f}",
             "",
-            "## Limitations",
+            "## Benchmark Comparison",
+            f"- Portfolio total return: {_format_pct(full_model_row['total_return'])}",
+            f"- SPY total return: {_format_pct(full_model_row['spy_total_return'])}",
+            f"- Weeks beating SPY: {full_model_row['weeks_beating_spy']:.2%}",
+            "",
+            "## Key Caveats",
             "- This project is a historical research backtest, not financial advice and not a live trading system.",
-            "- The largest methodological risk is point-in-time analyst data. If the analyst API returns only current consensus data, then it cannot be used for a valid historical backtest. The code therefore supports running the backtest without analyst filters, and the README clearly marks whether analyst data is point-in-time.",
-            "- The initial universe uses a static large-cap stock list, which introduces survivorship bias. A production-grade backtest should use historical index constituents or historical Fortune 500 membership.",
-            "- Transaction costs are simplified. Slippage, bid-ask spreads, taxes, borrow costs for shorts, and market impact are not fully modeled.",
-            "- News sentiment availability may vary by ticker and date, and the current default workflow does not include Alpha Vantage sentiment data.",
+            f"- {IMPORTANT_CAVEAT}",
+            "- The initial universe uses a static large-cap stock list, which introduces survivorship bias.",
+            "- Transaction costs are modeled using turnover-based costs rather than a brokerage-specific execution model.",
+            "- The SPY 200-day moving-average regime filter is optional and changes exposure rather than signal quality.",
             "",
             "## Charts",
         ]

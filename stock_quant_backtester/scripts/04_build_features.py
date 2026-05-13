@@ -13,7 +13,7 @@ from src.utils import str_to_bool
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--use-current-snapshot-analyst", default="false")
+    parser.add_argument("--use-current-snapshot-analyst", default="true")
     args = parser.parse_args()
 
     config = Config.from_env()

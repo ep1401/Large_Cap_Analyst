@@ -18,10 +18,10 @@ Each Monday, or the first trading day of the week:
 
 1. Load the current universe snapshot.
 2. Build features using only data available by that rebalance date.
-3. Apply hard filters.
-4. Rank qualifying stocks cross-sectionally.
+3. Apply minimal hard filters.
+4. Rank candidates cross-sectionally.
 5. Buy the top `N` names equally weighted.
-6. Hold for one trading week.
+6. Hold for `5`, `21`, or `63` trading days depending on the chosen test.
 7. Compare strategy returns against `SPY`.
 
 The project can run in technical-only mode if analyst or sentiment data is unavailable.
@@ -63,6 +63,7 @@ python scripts/01_fetch_prices.py
 python scripts/02_fetch_analyst_data.py
 python scripts/04_build_features.py
 python scripts/05_run_backtest.py
+python scripts/07_grid_search.py
 python scripts/06_generate_report.py
 ```
 
@@ -85,11 +86,11 @@ Supported modes:
 
 ### `scripts/04_build_features.py`
 
-Builds `data/final/features_panel.csv` with technical, analyst, optional sentiment, and forward-return evaluation columns.
+Builds `data/final/features_panel.csv` with technical, analyst, optional sentiment, regime, liquidity, and forward-return evaluation columns.
 
 ### `scripts/05_run_backtest.py`
 
-Runs multiple strategy variants:
+Runs multiple strategy variants for a chosen holding period:
 
 - `full_model`
 - `technical_only`
@@ -106,6 +107,10 @@ Outputs:
 
 Builds `outputs/reports/backtest_summary.md` with settings, results, limitations, and chart references.
 
+### `scripts/07_grid_search.py`
+
+Runs parameter combinations across strategy, `top_n`, holding period, analyst threshold, and regime settings. Saves `outputs/tables/grid_search_results.csv` and `outputs/reports/grid_search_summary.md`.
+
 ## Outputs
 
 Primary expected outputs:
@@ -114,18 +119,20 @@ Primary expected outputs:
 - `outputs/tables/weekly_portfolio_returns.csv`
 - `outputs/tables/weekly_holdings.csv`
 - `outputs/tables/strategy_comparison.csv`
+- `outputs/tables/grid_search_results.csv`
 - `outputs/charts/equity_curve_vs_spy.png`
 - `outputs/charts/drawdown_vs_spy.png`
 - `outputs/charts/weekly_excess_returns.png`
 - `outputs/charts/qualifying_stocks_per_week.png`
 - `outputs/reports/backtest_summary.md`
+- `outputs/reports/grid_search_summary.md`
 
 ## Notes On Interpretation
 
 - Technical features are point-in-time safe if built from historical prices only.
 - Analyst features should be treated as research-only unless a true historical target history feed is available.
 - Sentiment coverage can be sparse and skewed toward heavily covered names. The current default run does not include sentiment data.
-- The backtester uses simplified weekly holding-period returns and simplified transaction cost modeling.
+- The backtester now supports 5, 21, and 63 trading-day holding periods and uses turnover-based transaction cost modeling.
 
 ## Rate Limits
 
@@ -135,3 +142,12 @@ The fetchers throttle requests explicitly using environment-configured provider 
 - `FMP_CALLS_PER_MINUTE=300`
 
 The default implementation spaces requests to stay under those ceilings during sequential fetch runs.
+
+## Model Improvement Notes
+
+- The full model is now ranking-first rather than strict filter-first.
+- Analyst target data is long-horizon, so the project tests `5`, `21`, and `63` trading-day holding periods.
+- The benchmark ticker is excluded from candidate portfolios.
+- Transaction costs are turnover-based.
+- The SPY 200-day moving average regime filter is optional.
+- Analyst snapshot data is not a valid point-in-time backtest.

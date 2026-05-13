@@ -1,0 +1,11 @@
+pandas
+numpy
+requests
+python-dotenv
+matplotlib
+tqdm
+scipy
+scikit-learn
+vectorbt
+plotly
+

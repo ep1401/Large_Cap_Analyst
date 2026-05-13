@@ -1,0 +1,62 @@
+ticker,company_name,sector
+AAPL,Apple Inc.,Information Technology
+MSFT,Microsoft Corporation,Information Technology
+NVDA,NVIDIA Corporation,Information Technology
+AMZN,Amazon.com Inc.,Consumer Discretionary
+GOOGL,Alphabet Inc. Class A,Communication Services
+META,Meta Platforms Inc.,Communication Services
+BRK-B,Berkshire Hathaway Inc. Class B,Financials
+LLY,Eli Lilly and Company,Health Care
+AVGO,Broadcom Inc.,Information Technology
+JPM,JPMorgan Chase & Co.,Financials
+V,Visa Inc.,Financials
+UNH,UnitedHealth Group Incorporated,Health Care
+XOM,Exxon Mobil Corporation,Energy
+MA,Mastercard Incorporated,Financials
+COST,Costco Wholesale Corporation,Consumer Staples
+HD,Home Depot Inc.,Consumer Discretionary
+PG,Procter & Gamble Company,Consumer Staples
+NFLX,Netflix Inc.,Communication Services
+JNJ,Johnson & Johnson,Health Care
+BAC,Bank of America Corporation,Financials
+CRM,Salesforce Inc.,Information Technology
+ABBV,AbbVie Inc.,Health Care
+WMT,Walmart Inc.,Consumer Staples
+KO,Coca-Cola Company,Consumer Staples
+PEP,PepsiCo Inc.,Consumer Staples
+MCD,McDonald's Corporation,Consumer Discretionary
+ADBE,Adobe Inc.,Information Technology
+CSCO,Cisco Systems Inc.,Information Technology
+AMD,Advanced Micro Devices Inc.,Information Technology
+ORCL,Oracle Corporation,Information Technology
+TMO,Thermo Fisher Scientific Inc.,Health Care
+ACN,Accenture plc,Information Technology
+LIN,Linde plc,Materials
+WFC,Wells Fargo & Company,Financials
+DIS,The Walt Disney Company,Communication Services
+ABT,Abbott Laboratories,Health Care
+VZ,Verizon Communications Inc.,Communication Services
+INTC,Intel Corporation,Information Technology
+IBM,International Business Machines Corporation,Information Technology
+QCOM,QUALCOMM Incorporated,Information Technology
+TXN,Texas Instruments Incorporated,Information Technology
+CAT,Caterpillar Inc.,Industrials
+GE,GE Aerospace,Industrials
+GS,Goldman Sachs Group Inc.,Financials
+MS,Morgan Stanley,Financials
+AXP,American Express Company,Financials
+BA,Boeing Company,Industrials
+NKE,NIKE Inc. Class B,Consumer Discretionary
+MCO,Moody's Corporation,Financials
+SPGI,S&P Global Inc.,Financials
+CVX,Chevron Corporation,Energy
+MRK,Merck & Co. Inc.,Health Care
+PFE,Pfizer Inc.,Health Care
+CMCSA,Comcast Corporation Class A,Communication Services
+NOW,ServiceNow Inc.,Information Technology
+INTU,Intuit Inc.,Information Technology
+BKNG,Booking Holdings Inc.,Consumer Discretionary
+AMAT,Applied Materials Inc.,Information Technology
+AMGN,Amgen Inc.,Health Care
+LOW,Lowe's Companies Inc.,Consumer Discretionary
+

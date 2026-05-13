@@ -19,6 +19,17 @@ IMPORTANT_CAVEAT = (
     "across historical dates unless true point-in-time analyst history is provided. These results "
     "should be treated as research exploration, not a valid historical analyst-signal backtest."
 )
+DEV_END = pd.Timestamp("2024-12-31")
+TEST_START = pd.Timestamp("2025-01-01")
+
+
+def _slice_period(df: pd.DataFrame, start: pd.Timestamp | None = None, end: pd.Timestamp | None = None) -> pd.DataFrame:
+    sliced = df.copy()
+    if start is not None:
+        sliced = sliced.loc[sliced["date"] >= start]
+    if end is not None:
+        sliced = sliced.loc[sliced["date"] <= end]
+    return sliced
 
 
 def _dataframe_to_markdown(df: pd.DataFrame) -> str:
@@ -35,6 +46,10 @@ def _dataframe_to_markdown(df: pd.DataFrame) -> str:
 def main() -> None:
     config = Config.from_env()
     features = load_dataframe(config.final_dir / "features_panel.csv", parse_dates=["date"])
+    analyst_data_is_point_in_time = not (
+        "analyst_data_mode" in features.columns
+        and features["analyst_data_mode"].fillna("").eq("research_current_snapshot").any()
+    )
 
     strategy_names = ["full_model", "analyst_only", "technical_only"]
     top_ns = [10, 20, 30]
@@ -68,29 +83,38 @@ def main() -> None:
             min_avg_dollar_volume=20_000_000,
             strategy_name=strategy_name,
         )
-        metrics = calculate_performance_metrics(weekly)
-        results.append(
-            {
-                "strategy_name": strategy_name,
-                "top_n": top_n,
-                "holding_period_days": holding_period_days,
-                "analyst_count_threshold": effective_threshold,
-                "use_regime_filter": use_regime_filter,
-                "regime_exposure": regime_exposure,
-                **metrics,
-            }
-        )
+
+        full_metrics = calculate_performance_metrics(weekly, holding_period_days=holding_period_days)
+        dev_metrics = calculate_performance_metrics(_slice_period(weekly, end=DEV_END), holding_period_days=holding_period_days)
+        test_metrics = calculate_performance_metrics(_slice_period(weekly, start=TEST_START), holding_period_days=holding_period_days)
+
+        row = {
+            "strategy_name": strategy_name,
+            "top_n": top_n,
+            "holding_period_days": holding_period_days,
+            "analyst_count_threshold": effective_threshold,
+            "use_regime_filter": use_regime_filter,
+            "regime_exposure": regime_exposure,
+            "analyst_data_is_point_in_time": analyst_data_is_point_in_time,
+        }
+        row.update({f"full_{key}": value for key, value in full_metrics.items()})
+        row.update({f"dev_{key}": value for key, value in dev_metrics.items()})
+        row.update({f"test_{key}": value for key, value in test_metrics.items()})
+        results.append(row)
 
     results_df = pd.DataFrame(results).sort_values(
-        by=["sharpe_ratio", "excess_total_return", "max_drawdown"],
+        by=["test_sharpe_ratio", "test_excess_total_return", "test_max_drawdown"],
         ascending=[False, False, False],
     )
     save_dataframe(config.tables_dir / "grid_search_results.csv", results_df)
 
     top_sharpe = results_df.head(10).round(6)
-    top_excess = results_df.sort_values("excess_total_return", ascending=False).head(10).round(6)
+    top_excess = results_df.sort_values("test_excess_total_return", ascending=False).head(10).round(6)
     best_by_strategy = (
-        results_df.sort_values(by=["strategy_name", "sharpe_ratio", "excess_total_return"], ascending=[True, False, False])
+        results_df.sort_values(
+            by=["strategy_name", "test_sharpe_ratio", "test_excess_total_return"],
+            ascending=[True, False, False],
+        )
         .groupby("strategy_name", as_index=False)
         .head(1)
         .round(6)
@@ -102,11 +126,11 @@ def main() -> None:
         f"- Evaluated configurations: {len(results_df)}",
         f"- {IMPORTANT_CAVEAT}",
         "",
-        "## Top 10 By Sharpe",
+        "## Top 10 By Test-Period Sharpe",
         "",
         _dataframe_to_markdown(top_sharpe),
         "",
-        "## Top 10 By Excess Return Vs SPY",
+        "## Top 10 By Test-Period Excess Return Vs SPY",
         "",
         _dataframe_to_markdown(top_excess),
         "",

@@ -55,11 +55,27 @@ def create_plots(
     generated.append(path)
 
     fig, ax = plt.subplots(figsize=(10, 6))
-    ax.plot(df["date"], df["qualified_count"])
-    ax.set_title("Number of Qualifying Stocks Per Week")
+    ax.plot(df["date"], df["selected_count"])
+    ax.set_title("Selected Stocks Per Rebalance")
     path = charts_dir / "qualifying_stocks_per_week.png"
     _save_plot(fig, path)
     generated.append(path)
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.plot(df["date"], df["turnover"])
+    ax.set_title("Turnover Per Rebalance")
+    path = charts_dir / "turnover_per_rebalance.png"
+    _save_plot(fig, path)
+    generated.append(path)
+
+    if "exposure" in df.columns and df["exposure"].nunique() > 1:
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax.plot(df["date"], df["exposure"])
+        ax.set_ylim(0, 1.05)
+        ax.set_title("Exposure Per Rebalance")
+        path = charts_dir / "exposure_per_rebalance.png"
+        _save_plot(fig, path)
+        generated.append(path)
 
     if not holdings.empty:
         ticker_counts = holdings["ticker"].value_counts().head(15).sort_values()

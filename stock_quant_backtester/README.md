@@ -65,6 +65,7 @@ python scripts/04_build_features.py
 python scripts/05_run_backtest.py
 python scripts/07_grid_search.py
 python scripts/06_generate_report.py
+python scripts/08_validate_backtest.py
 ```
 
 ## Script Details
@@ -111,6 +112,10 @@ Builds `outputs/reports/backtest_summary.md` with settings, results, limitations
 
 Runs parameter combinations across strategy, `top_n`, holding period, analyst threshold, and regime settings. Saves `outputs/tables/grid_search_results.csv` and `outputs/reports/grid_search_summary.md`.
 
+### `scripts/08_validate_backtest.py`
+
+Runs basic correctness checks on holdings, benchmark exclusion, turnover-based costs, scoring inputs, and rebalance counts for `5`, `21`, and `63` trading-day schedules.
+
 ## Outputs
 
 Primary expected outputs:
@@ -132,7 +137,7 @@ Primary expected outputs:
 - Technical features are point-in-time safe if built from historical prices only.
 - Analyst features should be treated as research-only unless a true historical target history feed is available.
 - Sentiment coverage can be sparse and skewed toward heavily covered names. The current default run does not include sentiment data.
-- The backtester now supports 5, 21, and 63 trading-day holding periods and uses turnover-based transaction cost modeling.
+- The backtester now supports 5, 21, and 63 trading-day holding periods, uses non-overlapping rebalances for those horizons, and uses turnover-based transaction cost modeling.
 
 ## Rate Limits
 
@@ -151,3 +156,6 @@ The default implementation spaces requests to stay under those ceilings during s
 - Transaction costs are turnover-based.
 - The SPY 200-day moving average regime filter is optional.
 - Analyst snapshot data is not a valid point-in-time backtest.
+- `holding_period_days` controls both the forward-return horizon and the rebalance frequency.
+- `21`-day and `63`-day returns are not compounded weekly in the corrected engine.
+- Annualization uses `252 / holding_period_days`, not a fixed weekly constant.

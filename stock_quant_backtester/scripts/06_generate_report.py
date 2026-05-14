@@ -39,6 +39,12 @@ def main() -> None:
     comparison_dev = load_dataframe(config.tables_dir / "strategy_comparison_dev.csv")
     comparison_test = load_dataframe(config.tables_dir / "strategy_comparison_test.csv")
     validation = load_dataframe(config.tables_dir / "backtest_validation.csv")
+    diagnostics_path = config.tables_dir / "filter_diagnostics.csv"
+    diagnostics = load_dataframe(diagnostics_path, parse_dates=["date"]) if diagnostics_path.exists() else pd.DataFrame()
+    sentiment_diagnostics_path = config.tables_dir / "sentiment_diagnostics.csv"
+    sentiment_diagnostics = (
+        load_dataframe(sentiment_diagnostics_path, parse_dates=["date"]) if sentiment_diagnostics_path.exists() else pd.DataFrame()
+    )
     weekly = load_dataframe(config.tables_dir / "weekly_portfolio_returns.csv", parse_dates=["date"])
     features = load_dataframe(config.final_dir / "features_panel.csv", parse_dates=["date"])
     chart_paths = sorted(path.name for path in Path(config.charts_dir).glob("*.png"))
@@ -52,6 +58,50 @@ def main() -> None:
     full_model_test = comparison_test.loc[comparison_test["strategy_name"] == "full_model"].iloc[0]
     under_diversified = float(full_model_full["average_selected_count"]) < 3
     validation_diff = float(validation["absolute_difference"].iloc[0])
+    diagnostics_summary: list[str] = []
+
+    if not diagnostics.empty:
+        avg_final_pass_count = float(diagnostics["final_pass_count"].mean())
+        pct_fewer_than_top_n = float((diagnostics["selected_count"] < int(full_model_full["top_n"])).mean())
+        drop_columns = [
+            ("liquidity", "starting_universe_count", "passed_liquidity_count"),
+            ("analyst_count", "passed_liquidity_count", "passed_analyst_count"),
+            ("consensus_upside", "passed_analyst_count", "passed_consensus_upside_count"),
+            ("low_target_upside", "passed_consensus_upside_count", "passed_low_target_upside_count"),
+            ("revision_7d", "passed_low_target_upside_count", "passed_revision_7d_count"),
+            ("revision_30d", "passed_revision_7d_count", "passed_revision_30d_count"),
+            ("resistance_breakout", "passed_revision_30d_count", "passed_resistance_count"),
+        ]
+
+    sentiment_summary: list[str] = []
+    if not sentiment_diagnostics.empty:
+        coverage_pct = float(sentiment_diagnostics["coverage_pct_7d"].mean())
+        avg_article_count = float(sentiment_diagnostics["avg_article_count_7d"].mean())
+        selected_positive_pct = float(sentiment_diagnostics["selected_positive_sentiment_pct"].mean())
+        restrictive = coverage_pct < 0.15 or float(
+            (sentiment_diagnostics["candidates_with_news_7d"] < sentiment_diagnostics["total_candidates"] * 0.1).mean()
+        ) > 0.5
+        sentiment_summary = [
+            "",
+            "## Sentiment Coverage Diagnostics",
+            f"- Percent of universe with at least one article in prior 7 days: {_format_pct(coverage_pct)}",
+            f"- Average article_count_7d: {avg_article_count:.2f}",
+            f"- Percent of selected holdings with positive sentiment: {_format_pct(selected_positive_pct)}",
+            f"- Sentiment filters appear too restrictive: {restrictive}",
+        ]
+        drop_stats: list[tuple[str, float]] = []
+        for name, before_col, after_col in drop_columns:
+            if before_col in diagnostics.columns and after_col in diagnostics.columns:
+                drop_stats.append((name, float((diagnostics[before_col] - diagnostics[after_col]).mean())))
+        most_restrictive_filter = max(drop_stats, key=lambda item: item[1])[0] if drop_stats else "n/a"
+        diagnostics_summary = [
+            "",
+            "## Filter Diagnostics",
+            f"- Average final pass count: {avg_final_pass_count:.2f}",
+            f"- Percent of periods with fewer than top_n candidates: {_format_pct(pct_fewer_than_top_n)}",
+            f"- Most restrictive filter by average drop count: {most_restrictive_filter}",
+            f"- Under-diversified under current settings: {under_diversified or pct_fewer_than_top_n > 0.5}",
+        ]
 
     lines = [
         "# Backtest Summary",
@@ -117,6 +167,9 @@ def main() -> None:
         f"- Full-period weeks beating SPY: {full_model_full['weeks_beating_spy']:.2%}",
         f"- Test-period weeks beating SPY: {full_model_test['weeks_beating_spy']:.2%}",
     ]
+
+    lines.extend(diagnostics_summary)
+    lines.extend(sentiment_summary)
 
     if under_diversified:
         lines.extend(

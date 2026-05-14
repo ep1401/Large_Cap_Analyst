@@ -1,6 +1,6 @@
 # Large-Cap Analyst Momentum and Breakout Backtester
 
-This project backtests a weekly large-cap U.S. stock selection strategy that combines analyst price-target strength and technical breakout behavior, with optional sentiment support that is currently disabled in the default workflow. It is designed for historical research and comparison against `SPY`, not for live trading.
+This project backtests a weekly large-cap U.S. stock selection strategy that combines analyst price-target strength, technical breakout behavior, and optional news sentiment features. It is designed for historical research and comparison against `SPY`, not for live trading.
 
 This project is a historical research backtest, not financial advice and not a live trading system.
 
@@ -10,7 +10,7 @@ The initial universe uses a static large-cap stock list, which introduces surviv
 
 Transaction costs are simplified. Slippage, bid-ask spreads, taxes, borrow costs for shorts, and market impact are not fully modeled.
 
-News sentiment availability may vary by ticker and date, and the Alpha Vantage sentiment leg is currently paused in the default workflow.
+News sentiment availability may vary by ticker and date, and the default fast sentiment workflow now uses a cache-first Alpha Vantage news window plus optional local rescoring.
 
 ## Strategy Overview
 
@@ -30,7 +30,7 @@ The project can run in technical-only mode if analyst or sentiment data is unava
 
 - `EODHD` for daily OHLCV and benchmark price history
 - `Financial Modeling Prep` for analyst targets and coverage
-- `Alpha Vantage` for news sentiment is optional and currently not part of the default pipeline
+- `Alpha Vantage` for ticker-level news sentiment coverage
 
 ## Setup
 
@@ -61,22 +61,31 @@ stock_quant_backtester/
 ```bash
 python scripts/01_fetch_prices.py
 python scripts/02_fetch_analyst_data.py
+python scripts/00_cache_status.py
+python scripts/12_fetch_alpha_vantage_news.py --dry-run
+python scripts/12_fetch_alpha_vantage_news.py
+python scripts/13_build_news_sentiment.py
 python scripts/04_build_features.py
 python scripts/05_run_backtest.py
+python scripts/14_compare_sentiment_models.py
+python scripts/15_run_fast_sentiment_backtest.py
 python scripts/07_grid_search.py
 python scripts/06_generate_report.py
 python scripts/08_validate_backtest.py
+python scripts/09_compare_model_improvements.py
+python scripts/10_walk_forward_search.py
+python scripts/11_ml_rank_model.py
 ```
 
 ## Script Details
 
 ### `scripts/01_fetch_prices.py`
 
-Fetches EODHD daily prices for the static large-cap universe and `SPY`, saves per-ticker raw CSV files, and writes `data/processed/prices_all.csv`.
+Fetches EODHD daily prices for the static large-cap universe and `SPY`, saves per-ticker raw CSV caches under `data/raw/prices/eodhd/`, and writes `data/processed/prices_all.csv`.
 
 ### `scripts/02_fetch_analyst_data.py`
 
-Fetches current analyst target snapshots from FMP and writes processed features to `data/processed/analyst_features.csv`.
+Fetches current analyst target snapshots from FMP, caches raw endpoint responses under `data/raw/analyst/fmp/`, and writes processed features to `data/processed/analyst_features.csv`.
 
 Warning: Analyst data may not be point-in-time unless historical target summary fields are available from the API plan. Current-only analyst data should not be used for a true historical backtest.
 
@@ -87,15 +96,57 @@ Supported modes:
 
 ### `scripts/04_build_features.py`
 
-Builds `data/final/features_panel.csv` with technical, analyst, optional sentiment, regime, liquidity, and forward-return evaluation columns.
+Builds `data/final/features_panel.csv` with technical, analyst, optional sentiment, regime, liquidity, and forward-return evaluation columns. It also writes `data/final/features_panel_sentiment_1y.csv` for the default fast sentiment window.
+
+### `scripts/00_cache_status.py`
+
+Prints a cache summary for EODHD, FMP, Alpha Vantage, and the main processed files so you can see what is already reusable before starting a rerun.
+
+### `scripts/12_fetch_alpha_vantage_news.py`
+
+Fetches ticker-month Alpha Vantage news sentiment only for the configured sentiment window by default, caches raw JSON under `data/raw/news/alpha_vantage/`, and writes normalized CSV outputs:
+
+- `data/processed/stock_news_alpha_vantage.csv`
+- `data/processed/stock_news.csv`
+
+### `scripts/13_build_news_sentiment.py`
+
+Builds article-level and daily sentiment outputs from `data/processed/stock_news.csv`. By default it uses provider sentiment from Alpha Vantage when available, which makes reruns fast. If `--rescore-with-finbert` or `--prefer-finbert` is passed, it uses `ProsusAI/finbert` when locally available and falls back to a simple lexicon-based scorer if not.
+
+Outputs:
+
+- `data/processed/news_sentiment_articles.csv`
+- `data/processed/news_sentiment_daily.csv`
+
+### `scripts/14_compare_sentiment_models.py`
+
+Runs sentiment-aware strategy comparisons, writes:
+
+- `outputs/tables/sentiment_model_comparison.csv`
+- `outputs/tables/sentiment_diagnostics.csv`
+- `outputs/reports/sentiment_model_comparison.md`
+
+### `scripts/15_run_fast_sentiment_backtest.py`
+
+Runs the quick 1-year sentiment workflow end to end:
+
+1. checks cache status
+2. fetches only missing Alpha Vantage ticker-month files
+3. rebuilds sentiment CSVs if needed
+4. rebuilds features
+5. runs the 1-year sentiment comparison with `_1y` outputs
 
 ### `scripts/05_run_backtest.py`
 
 Runs multiple strategy variants for a chosen holding period:
 
 - `full_model`
+- `strict_checklist_model`
 - `technical_only`
+- `technical_momentum_model`
 - `analyst_only`
+
+It can also optionally run a condition-based exit backtest for checklist-style strategies.
 
 Outputs:
 
@@ -116,11 +167,24 @@ Runs parameter combinations across strategy, `top_n`, holding period, analyst th
 
 Runs basic correctness checks on holdings, benchmark exclusion, turnover-based costs, scoring inputs, and rebalance counts for `5`, `21`, and `63` trading-day schedules.
 
+### `scripts/09_compare_model_improvements.py`
+
+Builds a side-by-side comparison of rule-based improvements, benchmark baselines, simple momentum baselines, random-selection baselines, and condition-based variants. Saves `outputs/tables/model_improvement_comparison.csv` and `outputs/reports/model_improvement_comparison.md`.
+
+### `scripts/10_walk_forward_search.py`
+
+Runs a development-period parameter search and then reports out-of-sample test performance without retuning on the test window. Saves `outputs/tables/walk_forward_search_results.csv` and `outputs/reports/walk_forward_search_summary.md`.
+
+### `scripts/11_ml_rank_model.py`
+
+Runs an optional ML ranking experiment on the 2023 to 2024 training window and evaluates it on the 2025 test window. This does not replace the rule-based models and keeps the analyst snapshot caveat explicit. Saves `outputs/tables/ml_model_results.csv` and `outputs/reports/ml_model_summary.md`.
+
 ## Outputs
 
 Primary expected outputs:
 
 - `data/final/features_panel.csv`
+- `data/final/features_panel_sentiment_1y.csv`
 - `outputs/tables/weekly_portfolio_returns.csv`
 - `outputs/tables/weekly_holdings.csv`
 - `outputs/tables/strategy_comparison.csv`
@@ -131,13 +195,41 @@ Primary expected outputs:
 - `outputs/charts/qualifying_stocks_per_week.png`
 - `outputs/reports/backtest_summary.md`
 - `outputs/reports/grid_search_summary.md`
+- `outputs/reports/model_improvement_comparison.md`
+- `outputs/reports/walk_forward_search_summary.md`
+- `outputs/reports/ml_model_summary.md`
+- `outputs/reports/sentiment_model_comparison.md`
+- `outputs/reports/sentiment_model_comparison_1y.md`
 
 ## Notes On Interpretation
 
 - Technical features are point-in-time safe if built from historical prices only.
 - Analyst features should be treated as research-only unless a true historical target history feed is available.
-- Sentiment coverage can be sparse and skewed toward heavily covered names. The current default run does not include sentiment data.
+- Sentiment coverage can be sparse and skewed toward heavily covered names.
 - The backtester now supports 5, 21, and 63 trading-day holding periods, uses non-overlapping rebalances for those horizons, and uses turnover-based transaction cost modeling.
+
+## API Caching and Fast Sentiment Runs
+
+- API responses are cached under `data/raw/`.
+- Processed CSV files are saved under `data/processed/`.
+- Feature panels are saved under `data/final/`.
+- By default, sentiment fetching only uses a 1-year window.
+- To fetch the full historical period, pass explicit `--start-date` and `--end-date`.
+- To avoid API calls, rerun scripts without `--force`.
+- To force a refetch, pass `--force`.
+- `scripts/00_cache_status.py` shows what is already cached.
+- `scripts/15_run_fast_sentiment_backtest.py` runs a quick 1-year sentiment test.
+
+## News Sentiment Pipeline
+
+- Alpha Vantage news is used as the default source for ticker-level news sentiment.
+- Provider sentiment from Alpha Vantage is reused by default for fast reruns.
+- FinBERT is used locally when explicitly requested or when provider sentiment is unavailable.
+- If FinBERT is unavailable, fallback sentiment is used.
+- Sentiment features are aggregated daily and rolled over 7-day and 30-day windows.
+- Sentiment should be judged by out-of-sample test performance, not full-period performance.
+
+News sentiment is based on available Alpha Vantage news coverage and locally generated model scores. Missing articles, source coverage differences, publication timing, and model classification errors may affect historical accuracy.
 
 ## Rate Limits
 
@@ -145,6 +237,7 @@ The fetchers throttle requests explicitly using environment-configured provider 
 
 - `EODHD_CALLS_PER_MINUTE=1000`
 - `FMP_CALLS_PER_MINUTE=300`
+- `ALPHA_VANTAGE_REQUESTS_PER_MINUTE=60`
 
 The default implementation spaces requests to stay under those ceilings during sequential fetch runs.
 

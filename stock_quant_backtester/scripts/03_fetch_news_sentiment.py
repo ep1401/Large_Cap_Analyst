@@ -7,8 +7,8 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 def main() -> None:
     print(
-        "Alpha Vantage sentiment fetching is currently disabled. "
-        "The backtest now runs with EODHD prices and optional FMP analyst data only."
+        "Use scripts/12_fetch_alpha_vantage_news.py for cache-first Alpha Vantage news fetching. "
+        "This legacy entrypoint is kept only for compatibility."
     )
 
 

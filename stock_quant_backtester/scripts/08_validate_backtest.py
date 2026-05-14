@@ -28,7 +28,7 @@ def main() -> None:
         )
 
     for holding_period_days in sorted(VALID_HOLDING_PERIODS):
-        weekly, holdings = run_weekly_backtest(
+        weekly, holdings, diagnostics = run_weekly_backtest(
             features=features,
             holding_period_days=holding_period_days,
             benchmark=config.benchmark,
@@ -40,7 +40,7 @@ def main() -> None:
             use_analyst_filters=False,
             analyst_count_threshold=10,
             min_avg_dollar_volume=20_000_000,
-            strategy_name="technical_only",
+            strategy_name="technical_momentum_model",
         )
         assert config.benchmark not in holdings["ticker"].unique(), "Benchmark found in holdings."
         if not holdings.empty:
@@ -50,7 +50,6 @@ def main() -> None:
             assert (aligned == exposure_by_date).all(), "Weights do not sum to exposure."
         zero_turnover_with_cost = weekly.loc[(weekly["turnover"] == 0) & (weekly["transaction_cost"] != 0)]
         assert zero_turnover_with_cost.empty, "Transaction costs should be zero when turnover is zero."
-
         _, future_spy_return_column, _ = get_future_return_columns(holding_period_days)
         validation_dates = select_rebalance_dates(features, holding_period_days, config.benchmark)
         benchmark_slice = features.loc[
@@ -58,6 +57,11 @@ def main() -> None:
             ["date", future_spy_return_column],
         ]
         assert benchmark_slice[future_spy_return_column].notna().all(), "Missing benchmark forward returns on rebalance dates."
+        if holding_period_days == 21:
+            assert len(weekly) < 50, "21-day run still looks too frequent."
+        if holding_period_days == 63:
+            assert len(weekly) < 20, "63-day run still looks too frequent."
+        assert diagnostics["selected_count"].le(config.top_n).all()
 
     print("Backtest validation checks passed.")
 

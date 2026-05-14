@@ -5,6 +5,7 @@ from pathlib import Path
 import os
 
 from dotenv import load_dotenv
+import pandas as pd
 
 
 @dataclass(slots=True)
@@ -23,18 +24,32 @@ class Config:
     universe_path: Path
     eodhd_api_key: str
     fmp_api_key: str
+    alpha_vantage_api_key: str
     start_date: str
     end_date: str
+    sentiment_start_date: str
+    sentiment_end_date: str
+    sentiment_lookback_years: int
+    cache_enabled: bool
+    force_refresh: bool
+    news_provider: str
     benchmark: str
     initial_capital: float
     top_n: int
     transaction_cost_bps: float
     eodhd_calls_per_minute: int
     fmp_calls_per_minute: int
+    alpha_vantage_requests_per_minute: int
 
     @classmethod
     def from_env(cls, env_path: str | Path | None = None) -> "Config":
         load_dotenv(dotenv_path=env_path)
+        def env_bool(name: str, default: bool) -> bool:
+            value = os.getenv(name)
+            if value is None:
+                return default
+            return value.strip().lower() in {"1", "true", "t", "yes", "y"}
+
         project_root = Path(__file__).resolve().parents[1]
         data_dir = project_root / "data"
         raw_dir = data_dir / "raw"
@@ -44,6 +59,19 @@ class Config:
         charts_dir = outputs_dir / "charts"
         reports_dir = outputs_dir / "reports"
         tables_dir = outputs_dir / "tables"
+        end_date = os.getenv("END_DATE", "2026-01-01")
+        sentiment_start_override = os.getenv("SENTIMENT_START_DATE")
+        sentiment_end_override = os.getenv("SENTIMENT_END_DATE")
+        sentiment_lookback_years = int(os.getenv("SENTIMENT_LOOKBACK_YEARS", "1"))
+
+        if sentiment_start_override and sentiment_end_override:
+            sentiment_start_date = sentiment_start_override
+            sentiment_end_date = sentiment_end_override
+        else:
+            sentiment_end_ts = pd.Timestamp(end_date)
+            sentiment_start_ts = sentiment_end_ts - pd.DateOffset(years=sentiment_lookback_years)
+            sentiment_start_date = sentiment_start_ts.strftime("%Y-%m-%d")
+            sentiment_end_date = sentiment_end_ts.strftime("%Y-%m-%d")
 
         config = cls(
             project_root=project_root,
@@ -58,22 +86,46 @@ class Config:
             universe_path=data_dir / "universe" / "large_cap_universe.csv",
             eodhd_api_key=os.getenv("EODHD_API_KEY", ""),
             fmp_api_key=os.getenv("FMP_API_KEY", ""),
+            alpha_vantage_api_key=os.getenv("ALPHA_VANTAGE_API_KEY", ""),
             start_date=os.getenv("START_DATE", "2023-01-01"),
-            end_date=os.getenv("END_DATE", "2026-01-01"),
+            end_date=end_date,
+            sentiment_start_date=sentiment_start_date,
+            sentiment_end_date=sentiment_end_date,
+            sentiment_lookback_years=sentiment_lookback_years,
+            cache_enabled=env_bool("CACHE_ENABLED", True),
+            force_refresh=env_bool("FORCE_REFRESH", False),
+            news_provider=os.getenv("NEWS_PROVIDER", "alpha_vantage"),
             benchmark=os.getenv("BENCHMARK", "SPY"),
             initial_capital=float(os.getenv("INITIAL_CAPITAL", "10000")),
             top_n=int(os.getenv("TOP_N", "10")),
             transaction_cost_bps=float(os.getenv("TRANSACTION_COST_BPS", "10")),
             eodhd_calls_per_minute=int(os.getenv("EODHD_CALLS_PER_MINUTE", "1000")),
             fmp_calls_per_minute=int(os.getenv("FMP_CALLS_PER_MINUTE", "300")),
+            alpha_vantage_requests_per_minute=int(os.getenv("ALPHA_VANTAGE_REQUESTS_PER_MINUTE", "60")),
         )
         config.ensure_directories()
         return config
 
+    @property
+    def sentiment_start_ts(self) -> pd.Timestamp:
+        return pd.Timestamp(self.sentiment_start_date)
+
+    @property
+    def sentiment_end_ts(self) -> pd.Timestamp:
+        return pd.Timestamp(self.sentiment_end_date)
+
+    @property
+    def sentiment_window_label(self) -> str:
+        return f"{self.sentiment_start_date}_{self.sentiment_end_date}"
+
     def ensure_directories(self) -> None:
         for path in (
             self.raw_dir / "prices",
+            self.raw_dir / "prices" / "eodhd",
             self.raw_dir / "analyst",
+            self.raw_dir / "analyst" / "fmp",
+            self.raw_dir / "news",
+            self.raw_dir / "news" / "alpha_vantage",
             self.processed_dir,
             self.final_dir,
             self.charts_dir,

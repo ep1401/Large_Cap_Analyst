@@ -51,7 +51,13 @@ def main() -> None:
         and features["analyst_data_mode"].fillna("").eq("research_current_snapshot").any()
     )
 
-    strategy_names = ["full_model", "analyst_only", "technical_only"]
+    strategy_names = [
+        "full_model",
+        "strict_checklist_model",
+        "technical_only",
+        "technical_momentum_model",
+        "analyst_only",
+    ]
     top_ns = [10, 20, 30]
     holding_periods = [5, 21, 63]
     analyst_thresholds = [5, 10, 15, 20]
@@ -69,7 +75,7 @@ def main() -> None:
         regime_exposures,
     ):
         effective_threshold = analyst_threshold if strategy_name != "technical_only" else 0
-        weekly, _ = run_weekly_backtest(
+        weekly, _, diagnostics = run_weekly_backtest(
             features=features,
             holding_period_days=holding_period_days,
             benchmark=config.benchmark,
@@ -82,11 +88,19 @@ def main() -> None:
             analyst_count_threshold=effective_threshold,
             min_avg_dollar_volume=20_000_000,
             strategy_name=strategy_name,
+            require_positive_revision_7d=(strategy_name == "strict_checklist_model"),
+            resistance_window=63 if strategy_name == "strict_checklist_model" else 30,
         )
 
         full_metrics = calculate_performance_metrics(weekly, holding_period_days=holding_period_days)
         dev_metrics = calculate_performance_metrics(_slice_period(weekly, end=DEV_END), holding_period_days=holding_period_days)
         test_metrics = calculate_performance_metrics(_slice_period(weekly, start=TEST_START), holding_period_days=holding_period_days)
+        avg_final_pass_count = (
+            float(diagnostics["final_pass_count"].mean()) if not diagnostics.empty and "final_pass_count" in diagnostics.columns else 0.0
+        )
+        under_diversified_share = (
+            float((diagnostics["selected_count"] < top_n).mean()) if not diagnostics.empty and "selected_count" in diagnostics.columns else 0.0
+        )
 
         row = {
             "strategy_name": strategy_name,
@@ -96,6 +110,8 @@ def main() -> None:
             "use_regime_filter": use_regime_filter,
             "regime_exposure": regime_exposure,
             "analyst_data_is_point_in_time": analyst_data_is_point_in_time,
+            "average_final_pass_count": avg_final_pass_count,
+            "pct_periods_fewer_than_top_n": under_diversified_share,
         }
         row.update({f"full_{key}": value for key, value in full_metrics.items()})
         row.update({f"dev_{key}": value for key, value in dev_metrics.items()})
@@ -125,6 +141,7 @@ def main() -> None:
         "",
         f"- Evaluated configurations: {len(results_df)}",
         f"- {IMPORTANT_CAVEAT}",
+        "- Results should be judged primarily on test-period performance, not full-period leaderboard position.",
         "",
         "## Top 10 By Test-Period Sharpe",
         "",

@@ -17,8 +17,11 @@ def main() -> None:
     args = parser.parse_args()
 
     config = Config.from_env()
+    prices_path = config.processed_dir / "prices_all.csv"
+    if not prices_path.exists():
+        raise SystemExit("Missing data/processed/prices_all.csv. Run scripts/01_fetch_prices.py before building features.")
     features = build_feature_panel(
-        prices_path=config.processed_dir / "prices_all.csv",
+        prices_path=prices_path,
         universe_path=config.universe_path,
         analyst_path=config.processed_dir / "analyst_features.csv",
         sentiment_path=config.processed_dir / "news_sentiment_daily.csv",
@@ -26,7 +29,12 @@ def main() -> None:
         benchmark_ticker=config.benchmark,
         use_current_snapshot_analyst=str_to_bool(args.use_current_snapshot_analyst),
     )
+    sentiment_panel = features.loc[
+        (features["date"] >= config.sentiment_start_ts) & (features["date"] < config.sentiment_end_ts)
+    ].copy()
+    sentiment_panel.to_csv(config.final_dir / "features_panel_sentiment_1y.csv", index=False)
     print(f"Saved features rows: {len(features)}")
+    print(f"Saved 1-year sentiment feature rows: {len(sentiment_panel)}")
 
 
 if __name__ == "__main__":

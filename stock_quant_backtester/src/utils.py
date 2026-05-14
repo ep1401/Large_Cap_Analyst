@@ -64,7 +64,8 @@ def safe_get_json(
                 exc,
             )
             time.sleep(retry_sleep_seconds * attempt)
-    raise RuntimeError(f"Failed to fetch JSON from {url}") from last_error
+    detail = f": {last_error}" if last_error is not None else ""
+    raise RuntimeError(f"Failed to fetch JSON from {url}{detail}") from last_error
 
 
 def save_json(path: str | Path, data: Any) -> None:

@@ -104,3 +104,64 @@ def create_plots(
         generated.append(path)
 
     return generated
+
+
+def create_sentiment_plots(
+    diagnostics_df: pd.DataFrame,
+    comparison_df: pd.DataFrame,
+    strategy_curves_df: pd.DataFrame,
+    charts_dir: str | Path,
+) -> list[Path]:
+    charts_dir = Path(charts_dir)
+    generated: list[Path] = []
+
+    if not diagnostics_df.empty:
+        diag = diagnostics_df.sort_values("date").copy()
+
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax.plot(diag["date"], diag["coverage_pct_7d"], label="Universe coverage %")
+        ax.set_title("Sentiment Coverage Over Time")
+        ax.set_ylim(0, 1)
+        ax.legend()
+        path = charts_dir / "sentiment_coverage_over_time.png"
+        _save_plot(fig, path)
+        generated.append(path)
+
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax.plot(diag["date"], diag["average_news_sentiment_7d"], label="Universe avg sentiment")
+        ax.plot(diag["date"], diag["selected_avg_news_sentiment_7d"], label="Selected avg sentiment")
+        ax.set_title("Selected vs Universe Sentiment")
+        ax.legend()
+        path = charts_dir / "selected_vs_universe_sentiment.png"
+        _save_plot(fig, path)
+        generated.append(path)
+
+    if not strategy_curves_df.empty:
+        fig, ax = plt.subplots(figsize=(10, 6))
+        for strategy_name, group in strategy_curves_df.groupby("strategy_name"):
+            ax.plot(group["date"], group["portfolio_value"], label=strategy_name)
+        ax.set_title("Sentiment Strategy Equity Curves")
+        ax.legend()
+        path = charts_dir / "sentiment_strategy_equity_curves.png"
+        _save_plot(fig, path)
+        generated.append(path)
+
+    if not comparison_df.empty:
+        best_rows = (
+            comparison_df.sort_values(
+                ["test_period_excess_return_vs_spy", "test_sharpe_ratio", "max_drawdown"],
+                ascending=[False, False, False],
+            )
+            .groupby("strategy_name", as_index=False)
+            .head(1)
+            .copy()
+        )
+        fig, ax = plt.subplots(figsize=(12, 6))
+        ax.bar(best_rows["strategy_name"], best_rows["test_period_excess_return_vs_spy"])
+        ax.set_title("Sentiment Model Test Period Comparison")
+        ax.tick_params(axis="x", rotation=45)
+        path = charts_dir / "sentiment_model_test_period_comparison.png"
+        _save_plot(fig, path)
+        generated.append(path)
+
+    return generated

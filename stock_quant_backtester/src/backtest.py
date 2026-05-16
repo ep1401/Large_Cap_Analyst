@@ -15,6 +15,7 @@ from src.scoring import (
     get_strategy_filter_params,
     score_rebalance_date,
     strategy_analyst_data_mode,
+    validate_strategy_holding_period,
     validate_holding_period_days,
 )
 from src.utils import LOGGER, save_dataframe
@@ -244,6 +245,7 @@ def run_weekly_backtest(
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Run a non-overlapping cross-sectional backtest with turnover costs and diagnostics."""
     validate_holding_period_days(holding_period_days)
+    validate_strategy_holding_period(strategy_name, holding_period_days)
     if not 0.0 <= regime_exposure <= 1.0:
         raise ValueError(f"regime_exposure must be between 0.0 and 1.0; got {regime_exposure}")
 

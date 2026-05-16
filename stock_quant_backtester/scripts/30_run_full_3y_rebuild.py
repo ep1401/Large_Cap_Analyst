@@ -40,6 +40,7 @@ from src.utils import load_dataframe, save_dataframe
 SNAPSHOT_ANALYST_CAVEAT = (
     "Important caveat: analyst-driven snapshot results use FMP data as a current snapshot merged across historical dates unless true point-in-time analyst target history is provided. These results should be treated as research exploration, not a valid historical analyst-signal backtest."
 )
+BACKTEST_PERFORMANCE_CAVEAT = "Back-tested performance is hypothetical and does not reflect actual live performance."
 HISTORICAL_RATING_NOTE = (
     "Historical rating-count features are built from dated FMP grades-historical records and use only the latest record available on or before each rebalance date."
 )
@@ -354,6 +355,7 @@ def _build_backtest_report(
         f"- Holding period days: {holding_period_days}",
         f"- {HISTORICAL_RATING_NOTE}",
         f"- {SNAPSHOT_ANALYST_CAVEAT}",
+        f"- {BACKTEST_PERFORMANCE_CAVEAT}",
         f"- {SENTIMENT_CAVEAT}",
         f"- {BACKTEST_CAVEAT}",
         "",
@@ -394,6 +396,7 @@ def _build_sentiment_report(
         "",
         f"- {SNAPSHOT_ANALYST_CAVEAT}",
         f"- {HISTORICAL_RATING_NOTE}",
+        f"- {BACKTEST_PERFORMANCE_CAVEAT}",
         f"- {SENTIMENT_CAVEAT}",
         f"- {BACKTEST_CAVEAT}",
         "",
@@ -445,6 +448,7 @@ def _build_historical_coverage_outputs(
         "",
         f"- {SNAPSHOT_ANALYST_CAVEAT}",
         f"- {HISTORICAL_RATING_NOTE}",
+        f"- {BACKTEST_PERFORMANCE_CAVEAT}",
         f"- {SENTIMENT_CAVEAT}",
         f"- {BACKTEST_CAVEAT}",
         "",
@@ -495,6 +499,7 @@ def _build_final_family_report(
         f"- Test period: 2025-01-01 to 2025-12-31",
         f"- {SNAPSHOT_ANALYST_CAVEAT}",
         f"- {HISTORICAL_RATING_NOTE}",
+        f"- {BACKTEST_PERFORMANCE_CAVEAT}",
         f"- {SENTIMENT_CAVEAT}",
         f"- {BACKTEST_CAVEAT}",
         "",
@@ -530,7 +535,10 @@ def _build_master_report(
     benchmark_df: pd.DataFrame,
     sentiment_report_df: pd.DataFrame,
     historical_diag_df: pd.DataFrame,
+    combined_comparison_df: pd.DataFrame,
     final_best_rows: pd.DataFrame,
+    horizon_comparison_df: pd.DataFrame,
+    horizon_walk_forward_df: pd.DataFrame,
     include_snapshot_models: bool,
     start_date: str,
     end_date: str,
@@ -560,6 +568,43 @@ def _build_master_report(
         events = final_best_rows.loc[final_best_rows["strategy_name"] == "historical_rating_counts_plus_events"].iloc[0]
         base = final_best_rows.loc[final_best_rows["strategy_name"] == "historical_rating_counts_model"].iloc[0]
         historical_grade_events_helped = events["test_period_excess_return_vs_spy"] > base["test_period_excess_return_vs_spy"]
+
+    horizon_summary_rows = []
+    if not horizon_comparison_df.empty:
+        for horizon in [5, 21, 63]:
+            horizon_slice = horizon_comparison_df.loc[horizon_comparison_df["holding_period_days"] == horizon].copy()
+            horizon_slice = horizon_slice.sort_values(
+                ["test_period_excess_return_vs_spy", "test_sharpe_ratio", "max_drawdown"],
+                ascending=[False, False, False],
+            )
+            best_horizon = horizon_slice.iloc[0] if not horizon_slice.empty else None
+            previous_blend_slice = combined_comparison_df.loc[
+                (combined_comparison_df["strategy_name"] == "final_quant_model_1y_no_snapshot")
+                & (combined_comparison_df["holding_period_days"] == horizon)
+            ]
+            previous_blend = previous_blend_slice.iloc[0] if not previous_blend_slice.empty else None
+            walk_slice = horizon_walk_forward_df.loc[horizon_walk_forward_df["holding_period_days"] == horizon].copy()
+            walk_slice = walk_slice.loc[
+                walk_slice["strategy_name"] == (best_horizon["strategy_name"] if best_horizon is not None else "")
+            ]
+            windows_beating_spy = int(walk_slice["beat_spy"].sum()) if not walk_slice.empty else 0
+            avg_walk_excess = float(walk_slice["test_excess_return_vs_spy"].mean()) if not walk_slice.empty else float("nan")
+            horizon_summary_rows.append(
+                {
+                    "holding_period_days": horizon,
+                    "best_model": best_horizon["display_name"] if best_horizon is not None else "n/a",
+                    "beat_spy_on_2025_test": bool(best_horizon is not None and best_horizon["test_period_excess_return_vs_spy"] > 0),
+                    "test_period_excess_return_vs_spy": float(best_horizon["test_period_excess_return_vs_spy"]) if best_horizon is not None else float("nan"),
+                    "beat_previous_final_blend": bool(
+                        best_horizon is not None
+                        and previous_blend is not None
+                        and best_horizon["test_period_excess_return_vs_spy"] > previous_blend["test_period_excess_return_vs_spy"]
+                    ),
+                    "walk_forward_windows_beating_spy": windows_beating_spy,
+                    "walk_forward_average_excess_return_vs_spy": avg_walk_excess,
+                    "performance_concentrated_in_one_period": bool(windows_beating_spy <= 1),
+                }
+            )
 
     lines = [
         "# Full 3Y Master Report",
@@ -601,6 +646,10 @@ def _build_master_report(
         f"- Best test-period Sharpe: {best_overall['test_sharpe_ratio']:.2f}",
         f"- Best max drawdown: {best_overall['max_drawdown']:.2%}",
         "",
+        "## Horizon-Specific No-Snapshot Models",
+        "",
+        _dataframe_to_markdown(pd.DataFrame(horizon_summary_rows).round(6)) if horizon_summary_rows else "No horizon-specific model rows available.",
+        "",
         "## Test Period Results",
         f"- Whether any model beat SPY on test period: {best_overall['test_period_excess_return_vs_spy'] > 0}",
         f"- Whether any historically safer model beat SPY on test period: {bool(best_safer is not None and best_safer['test_period_excess_return_vs_spy'] > 0)}",
@@ -612,6 +661,7 @@ def _build_master_report(
         "## Model Caveats",
         f"- {SNAPSHOT_ANALYST_CAVEAT}",
         f"- {HISTORICAL_RATING_NOTE}",
+        f"- {BACKTEST_PERFORMANCE_CAVEAT}",
         f"- {SENTIMENT_CAVEAT}",
         f"- {BACKTEST_CAVEAT}",
         "",
@@ -1040,14 +1090,49 @@ def main() -> None:
         _copy_if_exists(config.tables_dir / "ml_model_results.csv", config.tables_dir / "full_3y_ml_model_results.csv")
         _copy_if_exists(config.reports_dir / "ml_model_summary.md", config.reports_dir / "full_3y_ml_model_summary.md")
 
-    print("Step 17: Building master report")
+    print("Step 17: Running horizon-specific no-snapshot comparisons")
+    horizon_proc = _run_subprocess(
+        [
+            sys.executable,
+            "scripts/31_compare_horizon_specific_models.py",
+            "--features-path",
+            str(dated_features_path),
+        ],
+        config.project_root,
+        dry_run=False,
+        capture_output=True,
+    )
+    if horizon_proc is not None and horizon_proc.returncode != 0:
+        raise SystemExit(horizon_proc.stderr or "Horizon-specific comparison failed.")
+
+    print("Step 18: Running horizon-specific walk-forward checks")
+    walk_forward_proc = _run_subprocess(
+        [
+            sys.executable,
+            "scripts/32_walk_forward_horizon_models.py",
+            "--features-path",
+            str(dated_features_path),
+        ],
+        config.project_root,
+        dry_run=False,
+        capture_output=True,
+    )
+    if walk_forward_proc is not None and walk_forward_proc.returncode != 0:
+        raise SystemExit(walk_forward_proc.stderr or "Horizon-specific walk-forward failed.")
+
+    print("Step 19: Building master report")
+    horizon_comparison_df = load_dataframe(config.tables_dir / "horizon_specific_model_comparison.csv")
+    horizon_walk_forward_df = load_dataframe(config.tables_dir / "horizon_specific_walk_forward_results.csv")
     _build_master_report(
         config_lines=config_lines,
         api_lines=api_lines,
         benchmark_df=benchmark_df,
         sentiment_report_df=sentiment_diagnostics,
         historical_diag_df=historical_coverage_df,
+        combined_comparison_df=combined_comparison,
         final_best_rows=final_best_rows,
+        horizon_comparison_df=horizon_comparison_df,
+        horizon_walk_forward_df=horizon_walk_forward_df,
         include_snapshot_models=args.include_snapshot_models,
         start_date=active_start_date,
         end_date=active_end_date,

@@ -23,6 +23,15 @@ SENTIMENT_STRATEGIES = {
     "historical_rating_counts_plus_events_sentiment",
     "final_quant_model_1y_no_snapshot",
     "final_quant_model_no_snapshot",
+    "final_quant_5d_no_snapshot",
+    "final_quant_5d_no_snapshot_loose",
+    "final_quant_5d_no_snapshot_no_sma_filter",
+    "final_quant_21d_no_snapshot",
+    "final_quant_21d_no_snapshot_with_sma_filter",
+    "final_quant_21d_no_snapshot_sector_capped",
+    "final_quant_63d_no_snapshot",
+    "final_quant_63d_no_snapshot_with_sma200_filter",
+    "final_quant_63d_no_snapshot_sector_capped",
 }
 SNAPSHOT_ANALYST_STRATEGIES = {
     "full_model",
@@ -44,6 +53,11 @@ HISTORICAL_GRADE_STRATEGIES = {
     "strict_historical_grades_checklist",
     "historical_rating_counts_plus_events",
     "historical_rating_counts_plus_events_sentiment",
+    "final_quant_5d_no_snapshot",
+    "final_quant_5d_no_snapshot_no_sma_filter",
+    "final_quant_21d_no_snapshot",
+    "final_quant_21d_no_snapshot_with_sma_filter",
+    "final_quant_21d_no_snapshot_sector_capped",
 }
 HISTORICAL_RATING_COUNT_STRATEGIES = {
     "historical_rating_counts_model",
@@ -52,6 +66,15 @@ HISTORICAL_RATING_COUNT_STRATEGIES = {
     "historical_rating_counts_plus_events_sentiment",
     "final_quant_model_1y_no_snapshot",
     "final_quant_model_no_snapshot",
+    "final_quant_5d_no_snapshot",
+    "final_quant_5d_no_snapshot_loose",
+    "final_quant_5d_no_snapshot_no_sma_filter",
+    "final_quant_21d_no_snapshot",
+    "final_quant_21d_no_snapshot_with_sma_filter",
+    "final_quant_21d_no_snapshot_sector_capped",
+    "final_quant_63d_no_snapshot",
+    "final_quant_63d_no_snapshot_with_sma200_filter",
+    "final_quant_63d_no_snapshot_sector_capped",
 }
 SNAPSHOT_FIELD_COLUMNS = {
     "consensus_upside",
@@ -78,12 +101,45 @@ SNAPSHOT_FIELD_COLUMNS = {
     "all_time_avg_price_target",
     "target_spread",
 }
-NO_SNAPSHOT_STRATEGIES = {"final_quant_model_1y_no_snapshot", "final_quant_model_no_snapshot"}
+NO_SNAPSHOT_STRATEGIES = {
+    "final_quant_model_1y_no_snapshot",
+    "final_quant_model_no_snapshot",
+    "final_quant_5d_no_snapshot",
+    "final_quant_5d_no_snapshot_loose",
+    "final_quant_5d_no_snapshot_no_sma_filter",
+    "final_quant_21d_no_snapshot",
+    "final_quant_21d_no_snapshot_with_sma_filter",
+    "final_quant_21d_no_snapshot_sector_capped",
+    "final_quant_63d_no_snapshot",
+    "final_quant_63d_no_snapshot_with_sma200_filter",
+    "final_quant_63d_no_snapshot_sector_capped",
+}
 STRATEGY_DISPLAY_NAMES = {
+    "spy": "SPY",
     "final_quant_model_1y_no_snapshot": "Final Quant Model - No Snapshot",
     "final_quant_model_no_snapshot": "Final Quant Model - No Snapshot",
     "final_quant_model_1y": "Final Quant Model - Snapshot Exploratory",
     "final_quant_model_snapshot": "Final Quant Model - Snapshot Exploratory",
+    "final_quant_5d_no_snapshot": "Final Quant 5D - No Snapshot",
+    "final_quant_5d_no_snapshot_loose": "Final Quant 5D - No Snapshot Loose",
+    "final_quant_5d_no_snapshot_no_sma_filter": "Final Quant 5D - No SMA Filter",
+    "final_quant_21d_no_snapshot": "Final Quant 21D - No Snapshot",
+    "final_quant_21d_no_snapshot_with_sma_filter": "Final Quant 21D - With SMA Filter",
+    "final_quant_21d_no_snapshot_sector_capped": "Final Quant 21D - Sector Capped",
+    "final_quant_63d_no_snapshot": "Final Quant 63D - No Snapshot",
+    "final_quant_63d_no_snapshot_with_sma200_filter": "Final Quant 63D - With SMA200 Filter",
+    "final_quant_63d_no_snapshot_sector_capped": "Final Quant 63D - Sector Capped",
+}
+HORIZON_SPECIFIC_STRATEGY_HOLDING_PERIODS = {
+    "final_quant_5d_no_snapshot": 5,
+    "final_quant_5d_no_snapshot_loose": 5,
+    "final_quant_5d_no_snapshot_no_sma_filter": 5,
+    "final_quant_21d_no_snapshot": 21,
+    "final_quant_21d_no_snapshot_with_sma_filter": 21,
+    "final_quant_21d_no_snapshot_sector_capped": 21,
+    "final_quant_63d_no_snapshot": 63,
+    "final_quant_63d_no_snapshot_with_sma200_filter": 63,
+    "final_quant_63d_no_snapshot_sector_capped": 63,
 }
 STRATEGY_SCORE_FIELDS = {
     "historical_rating_counts_model": {
@@ -173,6 +229,126 @@ STRATEGY_SCORE_FIELDS = {
         "net_upgrade_score_30d",
         "downgrade_count_30d",
         "recent_downgrade_flag_30d",
+    },
+    "final_quant_5d_no_snapshot": {
+        "historical_rating_score",
+        "historical_positive_rating_ratio",
+        "historical_negative_rating_ratio",
+        "net_upgrade_score_30d",
+        "downgrade_count_30d",
+        "relative_strength_21d",
+        "relevance_weighted_sentiment_7d",
+        "sentiment_change_7d_vs_30d",
+        "volatility_21d",
+        "breakout_63d",
+        "recent_downgrade_flag_30d",
+        "strong_negative_news_flag",
+        "above_sma_50",
+    },
+    "final_quant_5d_no_snapshot_loose": {
+        "historical_rating_score",
+        "historical_positive_rating_ratio",
+        "historical_negative_rating_ratio",
+        "net_upgrade_score_30d",
+        "downgrade_count_30d",
+        "relative_strength_21d",
+        "relevance_weighted_sentiment_7d",
+        "sentiment_change_7d_vs_30d",
+        "volatility_21d",
+        "breakout_63d",
+        "recent_downgrade_flag_30d",
+        "strong_negative_news_flag",
+        "above_sma_50",
+    },
+    "final_quant_5d_no_snapshot_no_sma_filter": {
+        "historical_rating_score",
+        "historical_positive_rating_ratio",
+        "historical_negative_rating_ratio",
+        "net_upgrade_score_30d",
+        "downgrade_count_30d",
+        "relative_strength_21d",
+        "relevance_weighted_sentiment_7d",
+        "sentiment_change_7d_vs_30d",
+        "volatility_21d",
+        "breakout_63d",
+        "recent_downgrade_flag_30d",
+        "strong_negative_news_flag",
+    },
+    "final_quant_21d_no_snapshot": {
+        "relevance_weighted_sentiment_7d",
+        "sentiment_change_7d_vs_30d",
+        "negative_news_ratio_7d",
+        "relative_strength_21d",
+        "relative_strength_63d",
+        "distance_to_63d_high",
+        "historical_rating_score",
+        "net_upgrade_score_30d",
+        "downgrade_count_30d",
+        "volatility_21d",
+        "breakout_63d",
+        "strong_negative_news_flag",
+    },
+    "final_quant_21d_no_snapshot_with_sma_filter": {
+        "relevance_weighted_sentiment_7d",
+        "sentiment_change_7d_vs_30d",
+        "negative_news_ratio_7d",
+        "relative_strength_21d",
+        "relative_strength_63d",
+        "distance_to_63d_high",
+        "historical_rating_score",
+        "net_upgrade_score_30d",
+        "downgrade_count_30d",
+        "volatility_21d",
+        "breakout_63d",
+        "above_sma_50",
+        "strong_negative_news_flag",
+    },
+    "final_quant_21d_no_snapshot_sector_capped": {
+        "relevance_weighted_sentiment_7d",
+        "sentiment_change_7d_vs_30d",
+        "negative_news_ratio_7d",
+        "relative_strength_21d",
+        "relative_strength_63d",
+        "distance_to_63d_high",
+        "historical_rating_score",
+        "net_upgrade_score_30d",
+        "downgrade_count_30d",
+        "volatility_21d",
+        "breakout_63d",
+        "strong_negative_news_flag",
+    },
+    "final_quant_63d_no_snapshot": {
+        "relevance_weighted_sentiment_30d",
+        "sentiment_change_7d_vs_30d",
+        "negative_news_ratio_7d",
+        "relative_strength_63d",
+        "above_sma_200",
+        "historical_rating_score",
+        "historical_rating_score_change_90d",
+        "beta_to_spy_63d",
+        "strong_negative_news_flag",
+    },
+    "final_quant_63d_no_snapshot_with_sma200_filter": {
+        "relevance_weighted_sentiment_30d",
+        "sentiment_change_7d_vs_30d",
+        "negative_news_ratio_7d",
+        "relative_strength_63d",
+        "above_sma_200",
+        "historical_rating_score",
+        "historical_rating_score_change_90d",
+        "beta_to_spy_63d",
+        "strong_negative_news_flag",
+    },
+    "final_quant_63d_no_snapshot_sector_capped": {
+        "relevance_weighted_sentiment_30d",
+        "sentiment_change_7d_vs_30d",
+        "negative_news_ratio_7d",
+        "relative_strength_63d",
+        "above_sma_200",
+        "historical_rating_score",
+        "historical_rating_score_change_90d",
+        "beta_to_spy_63d",
+        "strong_negative_news_flag",
     },
 }
 SENTIMENT_COLUMNS = [
@@ -356,6 +532,15 @@ def validate_no_snapshot_strategy_fields(strategy_name: str) -> None:
         raise ValueError(f"Strategy '{name}' references snapshot fields: {offending}")
 
 
+def validate_strategy_holding_period(strategy_name: str, holding_period_days: int) -> None:
+    name = canonical_strategy_name(strategy_name)
+    expected = HORIZON_SPECIFIC_STRATEGY_HOLDING_PERIODS.get(name)
+    if expected is not None and expected != holding_period_days:
+        raise ValueError(
+            f"Strategy '{name}' is intended only for holding_period_days={expected}; got {holding_period_days}."
+        )
+
+
 def strategy_analyst_data_mode(strategy_name: str) -> str:
     name = canonical_strategy_name(strategy_name)
     if name in {"historical_grades_model", "strict_historical_grades_checklist"}:
@@ -369,6 +554,18 @@ def strategy_analyst_data_mode(strategy_name: str) -> str:
     if name == "historical_rating_counts_plus_events":
         return "historical_rating_counts_plus_events"
     if name in {"historical_rating_counts_plus_events_sentiment", "final_quant_model_1y_no_snapshot"}:
+        return "historical_rating_counts_plus_events_sentiment"
+    if name in {
+        "final_quant_5d_no_snapshot",
+        "final_quant_5d_no_snapshot_loose",
+        "final_quant_5d_no_snapshot_no_sma_filter",
+        "final_quant_21d_no_snapshot",
+        "final_quant_21d_no_snapshot_with_sma_filter",
+        "final_quant_21d_no_snapshot_sector_capped",
+        "final_quant_63d_no_snapshot",
+        "final_quant_63d_no_snapshot_with_sma200_filter",
+        "final_quant_63d_no_snapshot_sector_capped",
+    }:
         return "historical_rating_counts_plus_events_sentiment"
     if name in SNAPSHOT_ANALYST_STRATEGIES:
         return "snapshot_current"
@@ -581,6 +778,28 @@ def get_filter_diagnostics(
                 diagnostics["historical_grade_event_data_present_count"] = int(rating_mask.sum())
         if params.strategy_name == "final_quant_model_1y_no_snapshot" and params.avoid_recent_downgrades:
             rating_mask &= ~_safe_series(df, "recent_downgrade_flag_30d", False).fillna(False)
+        if params.strategy_name in {"final_quant_5d_no_snapshot", "final_quant_5d_no_snapshot_no_sma_filter"}:
+            if "historical_grade_data_available" in df.columns:
+                rating_mask &= _safe_series(df, "historical_grade_data_available", False).fillna(False)
+            diagnostics["historical_grade_event_data_present_count"] = int(rating_mask.sum())
+            rating_mask &= ~_safe_series(df, "recent_downgrade_flag_30d", False).fillna(False)
+            rating_mask &= ~_safe_series(df, "strong_negative_news_flag", False).fillna(False)
+            if params.strategy_name == "final_quant_5d_no_snapshot":
+                rating_mask &= _safe_series(df, "above_sma_50", False).fillna(False).astype(bool)
+        if params.strategy_name == "final_quant_5d_no_snapshot_loose":
+            rating_mask &= ~_safe_series(df, "recent_downgrade_flag_30d", False).fillna(False)
+            rating_mask &= ~_safe_series(df, "strong_negative_news_flag", False).fillna(False)
+            rating_mask &= _safe_series(df, "above_sma_50", False).fillna(False).astype(bool)
+        if params.strategy_name in {"final_quant_21d_no_snapshot", "final_quant_21d_no_snapshot_sector_capped"}:
+            rating_mask &= ~_safe_series(df, "strong_negative_news_flag", False).fillna(False)
+        if params.strategy_name == "final_quant_21d_no_snapshot_with_sma_filter":
+            rating_mask &= ~_safe_series(df, "strong_negative_news_flag", False).fillna(False)
+            rating_mask &= _safe_series(df, "above_sma_50", False).fillna(False).astype(bool)
+        if params.strategy_name in {"final_quant_63d_no_snapshot", "final_quant_63d_no_snapshot_sector_capped"}:
+            rating_mask &= ~_safe_series(df, "strong_negative_news_flag", False).fillna(False)
+        if params.strategy_name == "final_quant_63d_no_snapshot_with_sma200_filter":
+            rating_mask &= ~_safe_series(df, "strong_negative_news_flag", False).fillna(False)
+            rating_mask &= _safe_series(df, "above_sma_200", False).fillna(False).astype(bool)
         diagnostics["final_pass_count"] = int(rating_mask.sum())
     elif params.strategy_name == "final_quant_model_1y_sentiment_risk_filter":
         risk_mask = analyst_mask
@@ -670,6 +889,15 @@ def apply_filters(
         "historical_rating_counts_plus_events",
         "historical_rating_counts_plus_events_sentiment",
         "final_quant_model_1y_no_snapshot",
+        "final_quant_5d_no_snapshot",
+        "final_quant_5d_no_snapshot_loose",
+        "final_quant_5d_no_snapshot_no_sma_filter",
+        "final_quant_21d_no_snapshot",
+        "final_quant_21d_no_snapshot_with_sma_filter",
+        "final_quant_21d_no_snapshot_sector_capped",
+        "final_quant_63d_no_snapshot",
+        "final_quant_63d_no_snapshot_with_sma200_filter",
+        "final_quant_63d_no_snapshot_sector_capped",
     }:
         mask &= _safe_series(df, "historical_rating_count_data_available", False).fillna(False)
         mask &= _safe_series(df, "historical_total_ratings", 0).fillna(0) >= params.min_historical_rating_count
@@ -680,6 +908,30 @@ def apply_filters(
             mask &= _safe_series(df, "historical_grade_data_available", False).fillna(False)
         if params.strategy_name == "final_quant_model_1y_no_snapshot" and params.avoid_recent_downgrades:
             mask &= ~_safe_series(df, "recent_downgrade_flag_30d", False).fillna(False)
+        if params.strategy_name in {"final_quant_5d_no_snapshot", "final_quant_5d_no_snapshot_no_sma_filter"} and "historical_grade_data_available" in df.columns:
+            mask &= _safe_series(df, "historical_grade_data_available", False).fillna(False)
+        if params.strategy_name in {
+            "final_quant_5d_no_snapshot",
+            "final_quant_5d_no_snapshot_loose",
+            "final_quant_5d_no_snapshot_no_sma_filter",
+        }:
+            mask &= ~_safe_series(df, "recent_downgrade_flag_30d", False).fillna(False)
+            mask &= ~_safe_series(df, "strong_negative_news_flag", False).fillna(False)
+            if params.strategy_name != "final_quant_5d_no_snapshot_no_sma_filter":
+                mask &= _safe_series(df, "above_sma_50", False).fillna(False).astype(bool)
+        if params.strategy_name in {
+            "final_quant_21d_no_snapshot",
+            "final_quant_21d_no_snapshot_with_sma_filter",
+            "final_quant_21d_no_snapshot_sector_capped",
+            "final_quant_63d_no_snapshot",
+            "final_quant_63d_no_snapshot_with_sma200_filter",
+            "final_quant_63d_no_snapshot_sector_capped",
+        }:
+            mask &= ~_safe_series(df, "strong_negative_news_flag", False).fillna(False)
+        if params.strategy_name == "final_quant_21d_no_snapshot_with_sma_filter":
+            mask &= _safe_series(df, "above_sma_50", False).fillna(False).astype(bool)
+        if params.strategy_name == "final_quant_63d_no_snapshot_with_sma200_filter":
+            mask &= _safe_series(df, "above_sma_200", False).fillna(False).astype(bool)
     elif params.strategy_name == "final_quant_model_1y_sentiment_risk_filter":
         mask &= ~_safe_series(df, "strong_negative_news_flag", False).fillna(False)
         mask &= ~(
@@ -1000,6 +1252,44 @@ def score_rebalance_date(
                 - 0.05 * recent_downgrade_penalty
             )
         df["score"] = score
+    elif strategy_name in {"final_quant_5d_no_snapshot", "final_quant_5d_no_snapshot_loose", "final_quant_5d_no_snapshot_no_sma_filter"}:
+        df["score"] = (
+            0.25 * historical_rating_score_component
+            + 0.15 * historical_positive_ratio_component
+            - 0.15 * historical_negative_ratio_component
+            + 0.20 * net_upgrade_30_component
+            - 0.15 * downgrade_count_30_component
+            + 0.15 * relative_strength_21_component
+            + 0.10 * relevance_weighted_sentiment_component
+            + 0.05 * sentiment_change_component
+            - 0.05 * volatility_component
+            + 0.05 * breakout_63_component
+        )
+    elif strategy_name in {"final_quant_21d_no_snapshot", "final_quant_21d_no_snapshot_with_sma_filter", "final_quant_21d_no_snapshot_sector_capped"}:
+        df["score"] = (
+            0.20 * relevance_weighted_sentiment_component
+            + 0.15 * sentiment_change_component
+            - 0.10 * negative_news_ratio_component
+            + 0.20 * relative_strength_21_component
+            + 0.15 * relative_strength_63_component
+            + 0.10 * distance_63_component
+            + 0.10 * historical_rating_score_component
+            + 0.10 * net_upgrade_30_component
+            - 0.10 * downgrade_count_30_component
+            - 0.05 * volatility_component
+            + 0.05 * breakout_63_component
+        )
+    elif strategy_name in {"final_quant_63d_no_snapshot", "final_quant_63d_no_snapshot_with_sma200_filter", "final_quant_63d_no_snapshot_sector_capped"}:
+        df["score"] = (
+            0.30 * relevance_weighted_sentiment_30_component
+            + 0.15 * sentiment_change_component
+            - 0.15 * negative_news_ratio_component
+            + 0.20 * relative_strength_63_component
+            + 0.10 * above_sma_200_component
+            + 0.10 * historical_rating_score_component
+            + 0.05 * _cross_sectional_zscore(_safe_series(df, "historical_rating_score_change_90d"))
+            - 0.05 * beta_component
+        )
     elif strategy_name == "final_quant_model_1y_no_sentiment":
         score = (
             0.24 * consensus_component

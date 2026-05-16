@@ -17,6 +17,7 @@ def main() -> None:
     args = parser.parse_args()
 
     config = Config.from_env()
+    print(config.describe_analysis_windows())
     prices_path = config.processed_dir / "prices_all.csv"
     if not prices_path.exists():
         raise SystemExit("Missing data/processed/prices_all.csv. Run scripts/01_fetch_prices.py before building features.")
@@ -25,6 +26,8 @@ def main() -> None:
         universe_path=config.universe_path,
         analyst_path=config.processed_dir / "analyst_features.csv",
         sentiment_path=config.processed_dir / "news_sentiment_daily.csv",
+        historical_grades_path=config.processed_dir / "historical_analyst_grades.csv",
+        historical_grade_features_output_path=config.processed_dir / "historical_grade_features.csv",
         output_path=config.final_dir / "features_panel.csv",
         benchmark_ticker=config.benchmark,
         use_current_snapshot_analyst=str_to_bool(args.use_current_snapshot_analyst),

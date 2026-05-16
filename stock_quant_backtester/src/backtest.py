@@ -9,10 +9,12 @@ import pandas as pd
 from src.scoring import (
     StrategyParams,
     apply_filters,
+    canonical_strategy_name,
     get_filter_diagnostics,
     get_future_return_columns,
     get_strategy_filter_params,
     score_rebalance_date,
+    strategy_analyst_data_mode,
     validate_holding_period_days,
 )
 from src.utils import LOGGER, save_dataframe
@@ -175,32 +177,35 @@ def _append_holding_rows(
     selected["holding_period_days"] = holding_period_days
     selected["future_return_used"] = selected[future_return_column]
     selected["future_excess_return_used"] = selected[future_excess_return_column]
-    holding_rows.extend(
-        selected[
-            [
-                "date",
-                "strategy_name",
-                "ticker",
-                "weight",
-                "score",
-                "holding_period_days",
-                "future_return_used",
-                "future_excess_return_used",
-                "consensus_upside",
-                "low_target_upside",
-                "analyst_count",
-                "relative_strength_21d",
-                "distance_to_30d_high",
-                "breakout_30d",
-                "volume_spike_ratio",
-                "volatility_21d",
-                "news_sentiment_7d",
-                "negative_news_ratio_7d",
-                "article_count_7d",
-                "strong_negative_news_flag",
-            ]
-        ].to_dict("records")
-    )
+    selected["analyst_data_mode"] = strategy_analyst_data_mode(strategy_name)
+    desired_columns = [
+        "date",
+        "strategy_name",
+        "ticker",
+        "weight",
+        "score",
+        "holding_period_days",
+        "future_return_used",
+        "future_excess_return_used",
+        "consensus_upside",
+        "low_target_upside",
+        "analyst_count",
+        "relative_strength_21d",
+        "distance_to_30d_high",
+        "breakout_30d",
+        "volume_spike_ratio",
+        "volatility_21d",
+        "news_sentiment_7d",
+        "negative_news_ratio_7d",
+        "article_count_7d",
+        "strong_negative_news_flag",
+        "net_upgrade_score_30d",
+        "downgrade_count_30d",
+        "positive_grade_ratio_30d",
+        "historical_grade_data_available",
+        "analyst_data_mode",
+    ]
+    holding_rows.extend(selected[[column for column in desired_columns if column in selected.columns]].to_dict("records"))
 
 
 def run_weekly_backtest(
@@ -228,6 +233,8 @@ def run_weekly_backtest(
     require_positive_sentiment: bool = False,
     avoid_strong_negative_news: bool = False,
     min_article_count_7d: int = 0,
+    avoid_recent_downgrades: bool = False,
+    min_grade_events_90d: int = 1,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Run a non-overlapping cross-sectional backtest with turnover costs and diagnostics."""
     validate_holding_period_days(holding_period_days)
@@ -236,12 +243,13 @@ def run_weekly_backtest(
 
     df = features.copy()
     df["date"] = pd.to_datetime(df["date"])
+    strategy_name = canonical_strategy_name(strategy_name)
     future_return_column, future_spy_return_column, future_excess_return_column = get_future_return_columns(
         holding_period_days
     )
     rebalance_dates = select_rebalance_dates(df, holding_period_days=holding_period_days, benchmark=benchmark)
 
-    if strategy_name in {"full_model", "strict_checklist_model", "analyst_only"} and use_analyst_filters and df["consensus_upside"].notna().sum() == 0:
+    if strategy_name in {"full_model", "strict_checklist_model", "analyst_snapshot_model"} and use_analyst_filters and df["consensus_upside"].notna().sum() == 0:
         LOGGER.warning(
             "Analyst data is missing for %s. Falling back to no-analyst mode when applicable.", strategy_name
         )
@@ -260,6 +268,8 @@ def run_weekly_backtest(
         require_positive_sentiment=require_positive_sentiment,
         avoid_strong_negative_news=avoid_strong_negative_news,
         min_article_count_7d=min_article_count_7d,
+        avoid_recent_downgrades=avoid_recent_downgrades,
+        min_grade_events_90d=min_grade_events_90d,
     )
 
     weekly_rows: list[dict] = []
@@ -352,6 +362,7 @@ def run_weekly_backtest(
                 "spy_value": spy_value,
                 "exposure": actual_exposure,
                 "regime_allowed": regime_allowed,
+                "analyst_data_mode": strategy_analyst_data_mode(strategy_name),
             }
         )
 

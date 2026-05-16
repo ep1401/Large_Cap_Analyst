@@ -21,6 +21,7 @@ def main() -> None:
     args = parser.parse_args()
 
     config = Config.from_env()
+    print(config.describe_analysis_windows())
     tickers = (
         [ticker.strip().upper() for ticker in args.tickers.split(",") if ticker.strip()]
         if args.tickers

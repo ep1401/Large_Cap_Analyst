@@ -18,12 +18,20 @@ def _print_processed_status(config: Config) -> None:
     for name in [
         "prices_all.csv",
         "analyst_features.csv",
+        "historical_analyst_grades.csv",
+        "historical_grade_features.csv",
+        "stock_news_alpha_vantage.csv",
         "stock_news.csv",
+        "news_sentiment_articles.csv",
         "news_sentiment_daily.csv",
     ]:
         path = config.processed_dir / name
         print(f"  - {name}: {'exists' if path.exists() else 'missing'}")
     print(f"  - features_panel.csv: {'exists' if (config.final_dir / 'features_panel.csv').exists() else 'missing'}")
+    print(
+        f"  - features_panel_sentiment_1y.csv: "
+        f"{'exists' if (config.final_dir / 'features_panel_sentiment_1y.csv').exists() else 'missing'}"
+    )
 
 
 def main() -> None:
@@ -32,6 +40,9 @@ def main() -> None:
     benchmark_and_universe = sorted(set(tickers + [config.benchmark]))
 
     print("Cache Summary")
+    print("")
+    print(f"- Date range: {config.start_date} to {config.end_date}")
+    print(f"- Sentiment window: {config.sentiment_start_date} to {config.sentiment_end_date}")
     print("")
 
     price_dir = config.raw_dir / "prices" / "eodhd"
@@ -74,6 +85,26 @@ def main() -> None:
     print(f"  - missing tickers: {', '.join(missing_analyst_tickers) if missing_analyst_tickers else 'none'}")
     print(f"  - blocked endpoint/error counts: blocked={blocked_count}, total_errors={error_count}")
 
+    historical_dir = config.raw_dir / "analyst" / "fmp_historical_grades"
+    historical_files = list(historical_dir.glob("*.json"))
+    historical_tickers = sorted({path.stem for path in historical_files})
+    missing_historical_tickers = sorted(set(tickers) - set(historical_tickers))
+    historical_blocked = 0
+    historical_errors = 0
+    for path in historical_files:
+        with path.open("r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+        for key in ["grades_endpoint", "grades_historical_endpoint"]:
+            endpoint_payload = payload.get(key, {})
+            if isinstance(endpoint_payload, dict) and endpoint_payload.get("error"):
+                historical_errors += 1
+                if endpoint_payload.get("status_code") in {402, 403}:
+                    historical_blocked += 1
+    print("- FMP historical grade cache:")
+    print(f"  - number of tickers cached: {len(historical_tickers)}")
+    print(f"  - missing tickers: {', '.join(missing_historical_tickers) if missing_historical_tickers else 'none'}")
+    print(f"  - blocked endpoint/error counts: blocked={historical_blocked}, total_errors={historical_errors}")
+
     windows = build_monthly_windows(
         tickers=tickers,
         start_date=config.sentiment_start_date,
@@ -95,6 +126,8 @@ def main() -> None:
     print(f"  - estimated runtime: {av_plan['estimated_runtime_minutes']:.2f} minutes")
 
     _print_processed_status(config)
+    print("")
+    print(f"- Estimated missing API calls total: {len(missing_price_tickers) + len(missing_analyst_tickers) + len(missing_historical_tickers) + av_plan['missing_requests']}")
 
 
 if __name__ == "__main__":

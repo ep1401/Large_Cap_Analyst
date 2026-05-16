@@ -17,6 +17,7 @@ from src.backtest import (
 )
 from src.config import Config
 from src.metrics import calculate_performance_metrics
+from src.scoring import strategy_analyst_data_mode
 from src.plots import create_plots
 from src.utils import LOGGER, load_dataframe, save_dataframe, str_to_bool
 
@@ -46,6 +47,7 @@ def _comparison_row(
     min_avg_dollar_volume: float,
     analyst_data_is_point_in_time: bool,
 ) -> dict[str, dict]:
+    analyst_data_mode = strategy_analyst_data_mode(strategy_name)
     periods = {
         "full": weekly,
         "dev": _slice_period(weekly, end=DEV_END),
@@ -63,6 +65,7 @@ def _comparison_row(
             "analyst_count_threshold": analyst_count_threshold,
             "min_avg_dollar_volume": min_avg_dollar_volume,
             "analyst_data_is_point_in_time": analyst_data_is_point_in_time,
+            "analyst_data_mode": analyst_data_mode,
             **metrics,
         }
     return rows
@@ -113,7 +116,7 @@ def main() -> None:
         "strict_checklist_model",
         "technical_only",
         "technical_momentum_model",
-        "analyst_only",
+        "analyst_snapshot_model",
     ]
     period_rows: dict[str, list[dict]] = {"full": [], "dev": [], "test": []}
     full_weekly: pd.DataFrame | None = None

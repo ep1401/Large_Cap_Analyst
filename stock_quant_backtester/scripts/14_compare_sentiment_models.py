@@ -12,11 +12,12 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 from src.backtest import run_weekly_backtest, select_rebalance_dates
 from src.config import Config
 from src.metrics import calculate_performance_metrics
+from src.scoring import strategy_analyst_data_mode
 from src.utils import load_dataframe, save_dataframe
 
 
 IMPORTANT_CAVEAT = (
-    "Important caveat: analyst-driven results currently use FMP data as a current snapshot merged "
+    "Important caveat: analyst-driven snapshot results use FMP data as a current snapshot merged "
     "across historical dates unless true point-in-time analyst history is provided. These results "
     "should be treated as research exploration, not a valid historical analyst-signal backtest."
 )
@@ -82,11 +83,27 @@ def _build_spy_returns(features: pd.DataFrame, benchmark: str, holding_period_da
 
 
 def _metrics_row(strategy_name: str, weekly: pd.DataFrame, *, holding_period_days: int, top_n: int, require_positive_sentiment: bool, avoid_strong_negative_news: bool, min_article_count_7d: int) -> dict:
-    full = calculate_performance_metrics(weekly, holding_period_days=holding_period_days)
-    dev = calculate_performance_metrics(_slice_period(weekly, end=DEV_END), holding_period_days=holding_period_days)
-    test = calculate_performance_metrics(_slice_period(weekly, start=TEST_START), holding_period_days=holding_period_days)
+    def safe_metrics(frame: pd.DataFrame) -> dict[str, float]:
+        if frame.empty:
+            return {
+                "total_return": float("nan"),
+                "excess_total_return": float("nan"),
+                "annualized_return": float("nan"),
+                "annualized_volatility": float("nan"),
+                "sharpe_ratio": float("nan"),
+                "max_drawdown": float("nan"),
+                "average_selected_count": float("nan"),
+                "average_turnover": float("nan"),
+                "number_of_rebalance_periods": 0,
+            }
+        return calculate_performance_metrics(frame, holding_period_days=holding_period_days)
+
+    full = safe_metrics(weekly)
+    dev = safe_metrics(_slice_period(weekly, end=DEV_END))
+    test = safe_metrics(_slice_period(weekly, start=TEST_START))
     return {
         "strategy_name": strategy_name,
+        "analyst_data_mode": strategy_analyst_data_mode(strategy_name),
         "holding_period_days": holding_period_days,
         "top_n": top_n,
         "require_positive_sentiment": require_positive_sentiment,
@@ -169,7 +186,7 @@ def _answer_questions(comparison_df: pd.DataFrame) -> list[str]:
         return "Yes." if delta > 0 else "No."
 
     best_no_sent = test_df.loc[
-        test_df["strategy_name"].isin(["full_model", "strict_checklist_model", "analyst_only", "technical_only", "technical_momentum_model"])
+        test_df["strategy_name"].isin(["full_model", "strict_checklist_model", "analyst_snapshot_model", "technical_only", "technical_momentum_model"])
     ].iloc[0]
     best_sent = test_df.loc[test_df["strategy_name"].isin([
         "full_model_with_sentiment",
@@ -255,7 +272,7 @@ def main() -> None:
         {"strategy_name": "strict_checklist_model", "use_analyst_filters": True},
         {"strategy_name": "strict_checklist_with_sentiment", "use_analyst_filters": True},
         {"strategy_name": "sentiment_only", "use_analyst_filters": False},
-        {"strategy_name": "analyst_only", "use_analyst_filters": True},
+        {"strategy_name": "analyst_snapshot_model", "use_analyst_filters": True},
         {"strategy_name": "analyst_sentiment_model", "use_analyst_filters": True},
         {"strategy_name": "technical_only", "use_analyst_filters": False},
         {"strategy_name": "technical_sentiment_model", "use_analyst_filters": False},

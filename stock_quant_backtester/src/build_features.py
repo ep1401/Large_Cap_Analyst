@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from src.build_historical_grade_features import HISTORICAL_GRADE_FEATURE_COLUMNS, build_historical_grade_features
 from src.utils import LOGGER, load_dataframe, save_dataframe
 
 
@@ -20,6 +21,7 @@ SENTIMENT_DAILY_COLUMNS = [
     "neutral_news_ratio_1d",
     "max_negative_prob_1d",
     "max_positive_prob_1d",
+    "relevance_weighted_sentiment_1d",
 ]
 
 
@@ -55,6 +57,19 @@ def _merge_analyst_snapshot(
         "consensus_upside",
         "low_target_upside",
         "high_target_upside",
+        "last_month_target_count",
+        "last_month_avg_price_target",
+        "last_quarter_target_count",
+        "last_quarter_avg_price_target",
+        "last_year_target_count",
+        "last_year_avg_price_target",
+        "all_time_target_count",
+        "all_time_avg_price_target",
+        "analyst_publishers",
+        "last_month_target_upside",
+        "last_quarter_target_upside",
+        "last_year_target_upside",
+        "all_time_target_upside",
         "target_spread",
         "target_revision_7d",
         "target_revision_30d",
@@ -91,6 +106,8 @@ def _merge_sentiment(features: pd.DataFrame, sentiment_df: pd.DataFrame | None) 
         features["article_count_30d"] = 0.0
         features["news_sentiment_7d"] = 0.0
         features["news_sentiment_30d"] = 0.0
+        features["relevance_weighted_sentiment_7d"] = 0.0
+        features["relevance_weighted_sentiment_30d"] = 0.0
         features["sentiment_change_7d_vs_30d"] = 0.0
         features["positive_news_ratio_7d"] = 0.0
         features["negative_news_ratio_7d"] = 0.0
@@ -114,6 +131,10 @@ def _merge_sentiment(features: pd.DataFrame, sentiment_df: pd.DataFrame | None) 
     sentiment_calendar = pd.DataFrame(index=calendar_index).reset_index()
     sentiment_calendar = sentiment_calendar.merge(sentiment_df, on=["ticker", "date"], how="left")
 
+    for column in SENTIMENT_DAILY_COLUMNS:
+        if column not in sentiment_calendar.columns:
+            sentiment_calendar[column] = 0.0
+
     fill_zero_columns = [column for column in SENTIMENT_DAILY_COLUMNS if column in sentiment_calendar.columns]
     for column in fill_zero_columns:
         sentiment_calendar[column] = pd.to_numeric(sentiment_calendar[column], errors="coerce").fillna(0.0)
@@ -126,6 +147,12 @@ def _merge_sentiment(features: pd.DataFrame, sentiment_df: pd.DataFrame | None) 
     sentiment_calendar["article_count_30d"] = grouped["article_count_1d"].transform(lambda s: s.rolling(30, min_periods=1).sum())
     sentiment_calendar["news_sentiment_7d"] = grouped["avg_sentiment_1d"].transform(lambda s: s.rolling(7, min_periods=1).mean())
     sentiment_calendar["news_sentiment_30d"] = grouped["avg_sentiment_1d"].transform(lambda s: s.rolling(30, min_periods=1).mean())
+    sentiment_calendar["relevance_weighted_sentiment_7d"] = grouped["relevance_weighted_sentiment_1d"].transform(
+        lambda s: s.rolling(7, min_periods=1).mean()
+    )
+    sentiment_calendar["relevance_weighted_sentiment_30d"] = grouped["relevance_weighted_sentiment_1d"].transform(
+        lambda s: s.rolling(30, min_periods=1).mean()
+    )
     sentiment_calendar["sentiment_change_7d_vs_30d"] = (
         sentiment_calendar["news_sentiment_7d"] - sentiment_calendar["news_sentiment_30d"]
     )
@@ -155,6 +182,8 @@ def _merge_sentiment(features: pd.DataFrame, sentiment_df: pd.DataFrame | None) 
                 "article_count_30d",
                 "news_sentiment_7d",
                 "news_sentiment_30d",
+                "relevance_weighted_sentiment_7d",
+                "relevance_weighted_sentiment_30d",
                 "sentiment_change_7d_vs_30d",
                 "positive_news_ratio_7d",
                 "negative_news_ratio_7d",
@@ -173,6 +202,8 @@ def _merge_sentiment(features: pd.DataFrame, sentiment_df: pd.DataFrame | None) 
         "article_count_30d",
         "news_sentiment_7d",
         "news_sentiment_30d",
+        "relevance_weighted_sentiment_7d",
+        "relevance_weighted_sentiment_30d",
         "sentiment_change_7d_vs_30d",
         "positive_news_ratio_7d",
         "negative_news_ratio_7d",
@@ -189,12 +220,40 @@ def _merge_sentiment(features: pd.DataFrame, sentiment_df: pd.DataFrame | None) 
     return merged
 
 
+def _merge_historical_grade_features(
+    features: pd.DataFrame,
+    historical_grades_path: str | Path | None,
+    processed_output_path: str | Path | None,
+) -> pd.DataFrame:
+    if not historical_grades_path or not Path(historical_grades_path).exists():
+        LOGGER.warning("No historical analyst grade file found; building features without historical grade features.")
+        for column in HISTORICAL_GRADE_FEATURE_COLUMNS:
+            if column.startswith("recent_") or column == "historical_grade_data_available":
+                features[column] = False
+            elif column.startswith("avg_new_grade_score"):
+                features[column] = 3.0
+            elif column.startswith("days_since_"):
+                features[column] = np.nan
+            else:
+                features[column] = 0.0
+        return features
+
+    historical_features = build_historical_grade_features(
+        historical_grades_path,
+        features[["date", "ticker"]].copy(),
+        processed_output_path,
+    )
+    return features.merge(historical_features, on=["date", "ticker"], how="left")
+
+
 def build_feature_panel(
     prices_path: str | Path,
     universe_path: str | Path,
     output_path: str | Path,
     analyst_path: str | Path | None = None,
     sentiment_path: str | Path | None = None,
+    historical_grades_path: str | Path | None = None,
+    historical_grade_features_output_path: str | Path | None = None,
     benchmark_ticker: str = "SPY",
     use_current_snapshot_analyst: bool = False,
 ) -> pd.DataFrame:
@@ -306,6 +365,7 @@ def build_feature_panel(
 
     features = _merge_sentiment(features, sentiment_df)
     features = _merge_analyst_snapshot(features, analyst_df, use_current_snapshot_analyst)
+    features = _merge_historical_grade_features(features, historical_grades_path, historical_grade_features_output_path)
     features = features.merge(universe[["ticker", "sector"]], on="ticker", how="left")
 
     final_columns = [
@@ -356,6 +416,8 @@ def build_feature_panel(
         "article_count_30d",
         "news_sentiment_7d",
         "news_sentiment_30d",
+        "relevance_weighted_sentiment_7d",
+        "relevance_weighted_sentiment_30d",
         "sentiment_change_7d_vs_30d",
         "positive_news_ratio_7d",
         "negative_news_ratio_7d",
@@ -370,9 +432,24 @@ def build_feature_panel(
         "analyst_count",
         "consensus_upside",
         "low_target_upside",
+        "high_target_upside",
+        "last_month_target_count",
+        "last_month_avg_price_target",
+        "last_quarter_target_count",
+        "last_quarter_avg_price_target",
+        "last_year_target_count",
+        "last_year_avg_price_target",
+        "all_time_target_count",
+        "all_time_avg_price_target",
+        "analyst_publishers",
+        "last_month_target_upside",
+        "last_quarter_target_upside",
+        "last_year_target_upside",
+        "all_time_target_upside",
         "target_spread",
         "target_revision_7d",
         "target_revision_30d",
+        *HISTORICAL_GRADE_FEATURE_COLUMNS,
         "spy_close",
         "spy_sma_50",
         "spy_sma_200",

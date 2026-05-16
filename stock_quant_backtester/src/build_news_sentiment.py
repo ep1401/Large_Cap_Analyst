@@ -5,6 +5,7 @@ from pathlib import Path
 import math
 import re
 
+import numpy as np
 import pandas as pd
 
 from src.utils import LOGGER, load_dataframe, save_dataframe
@@ -233,11 +234,14 @@ def build_news_sentiment_outputs(
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     articles_output_path = Path(articles_output_path)
     daily_output_path = Path(daily_output_path)
+    required_article_columns = {"provider_relevance_score"}
+    required_daily_columns = {"relevance_weighted_sentiment_1d"}
 
     if articles_output_path.exists() and daily_output_path.exists() and not force:
         articles_df = load_dataframe(articles_output_path, parse_dates=["published_date", "date"])
         daily_df = load_dataframe(daily_output_path, parse_dates=["date"])
-        return articles_df, daily_df
+        if required_article_columns.issubset(articles_df.columns) and required_daily_columns.issubset(daily_df.columns):
+            return articles_df, daily_df
 
     news_df = load_dataframe(news_input_path, parse_dates=["published_date", "date"])
     if news_df.empty:
@@ -253,6 +257,7 @@ def build_news_sentiment_outputs(
                 "negative_prob",
                 "neutral_prob",
                 "model_used",
+                "provider_relevance_score",
                 "url",
                 "site",
             ]
@@ -272,6 +277,7 @@ def build_news_sentiment_outputs(
                 "neutral_news_ratio_1d",
                 "max_negative_prob_1d",
                 "max_positive_prob_1d",
+                "relevance_weighted_sentiment_1d",
             ]
         )
         save_dataframe(articles_output_path, empty_articles)
@@ -305,6 +311,7 @@ def build_news_sentiment_outputs(
                 "negative_prob": result.negative_prob,
                 "neutral_prob": result.neutral_prob,
                 "model_used": result.model_used,
+                "provider_relevance_score": pd.to_numeric(getattr(row, "provider_relevance_score", np.nan), errors="coerce"),
                 "url": row.url,
                 "site": getattr(row, "site", getattr(row, "source", "")),
             }
@@ -335,10 +342,18 @@ def _build_daily_aggregates(articles_df: pd.DataFrame) -> pd.DataFrame:
                 "neutral_news_ratio_1d",
                 "max_negative_prob_1d",
                 "max_positive_prob_1d",
+                "relevance_weighted_sentiment_1d",
             ]
         )
 
     grouped = articles_df.groupby(["date", "ticker"], as_index=False)
+    weighted_score = articles_df["sentiment_score"] * articles_df["provider_relevance_score"].fillna(1.0)
+    weighted_weight = articles_df["provider_relevance_score"].fillna(1.0)
+    articles_with_weights = articles_df.assign(
+        weighted_sentiment_score=weighted_score,
+        weighted_sentiment_weight=weighted_weight,
+    )
+    grouped = articles_with_weights.groupby(["date", "ticker"], as_index=False)
     daily_df = grouped.agg(
         article_count_1d=("sentiment_score", "size"),
         avg_sentiment_1d=("sentiment_score", "mean"),
@@ -348,11 +363,17 @@ def _build_daily_aggregates(articles_df: pd.DataFrame) -> pd.DataFrame:
         neutral_news_count_1d=("sentiment_label", lambda s: int((s == "neutral").sum())),
         max_negative_prob_1d=("negative_prob", "max"),
         max_positive_prob_1d=("positive_prob", "max"),
+        weighted_sentiment_score_sum=("weighted_sentiment_score", "sum"),
+        weighted_sentiment_weight_sum=("weighted_sentiment_weight", "sum"),
     )
 
     article_count = daily_df["article_count_1d"].replace(0, pd.NA)
     daily_df["positive_news_ratio_1d"] = (daily_df["positive_news_count_1d"] / article_count).fillna(0.0)
     daily_df["negative_news_ratio_1d"] = (daily_df["negative_news_count_1d"] / article_count).fillna(0.0)
     daily_df["neutral_news_ratio_1d"] = (daily_df["neutral_news_count_1d"] / article_count).fillna(0.0)
+    daily_df["relevance_weighted_sentiment_1d"] = (
+        daily_df["weighted_sentiment_score_sum"] / daily_df["weighted_sentiment_weight_sum"].replace(0, pd.NA)
+    ).fillna(0.0)
+    daily_df = daily_df.drop(columns=["weighted_sentiment_score_sum", "weighted_sentiment_weight_sum"])
 
     return daily_df.sort_values(["ticker", "date"]).reset_index(drop=True)

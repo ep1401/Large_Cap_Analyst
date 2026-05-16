@@ -15,7 +15,7 @@ from src.utils import load_dataframe, save_dataframe
 
 
 IMPORTANT_CAVEAT = (
-    "Important caveat: analyst-driven results currently use FMP data as a current snapshot merged "
+    "Important caveat: analyst-driven snapshot results use FMP data as a current snapshot merged "
     "across historical dates unless true point-in-time analyst history is provided. These results "
     "should be treated as research exploration, not a valid historical analyst-signal backtest."
 )

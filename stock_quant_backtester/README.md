@@ -69,6 +69,11 @@ python scripts/04_build_features.py
 python scripts/05_run_backtest.py
 python scripts/14_compare_sentiment_models.py
 python scripts/15_run_fast_sentiment_backtest.py
+python scripts/16_fetch_fmp_historical_grades.py
+python scripts/17_compare_historical_analyst_models.py
+python scripts/18_validate_historical_grades.py
+python scripts/20_run_final_quant_model_1y.py
+python scripts/99_clean_outputs.py --list
 python scripts/07_grid_search.py
 python scripts/06_generate_report.py
 python scripts/08_validate_backtest.py
@@ -96,7 +101,7 @@ Supported modes:
 
 ### `scripts/04_build_features.py`
 
-Builds `data/final/features_panel.csv` with technical, analyst, optional sentiment, regime, liquidity, and forward-return evaluation columns. It also writes `data/final/features_panel_sentiment_1y.csv` for the default fast sentiment window.
+Builds `data/final/features_panel.csv` with technical, analyst snapshot, optional sentiment, optional historical analyst-grade, regime, liquidity, and forward-return evaluation columns. It also writes `data/final/features_panel_sentiment_1y.csv` for the default fast sentiment window.
 
 ### `scripts/00_cache_status.py`
 
@@ -136,6 +141,30 @@ Runs the quick 1-year sentiment workflow end to end:
 4. rebuilds features
 5. runs the 1-year sentiment comparison with `_1y` outputs
 
+### `scripts/16_fetch_fmp_historical_grades.py`
+
+Fetches FMP historical analyst grade data, caches raw payloads under `data/raw/analyst/fmp_historical_grades/`, and writes normalized point-in-time grade events to `data/processed/historical_analyst_grades.csv`.
+
+### `scripts/17_compare_historical_analyst_models.py`
+
+Compares technical, snapshot-analyst, and historical-grade strategies. Writes:
+
+- `outputs/tables/historical_analyst_model_comparison.csv`
+- `outputs/tables/historical_grade_diagnostics.csv`
+- `outputs/reports/historical_analyst_model_comparison.md`
+
+### `scripts/18_validate_historical_grades.py`
+
+Samples ticker/date rows from the feature panel and confirms the historical analyst-grade features only use FMP grade events with `event_date <= feature_date`.
+
+### `scripts/20_run_final_quant_model_1y.py`
+
+Runs the finalized one-year quant comparison across snapshot analyst, technical, sentiment-aware, and hybrid final-model variants. It saves dated comparison tables, a final report, and dedicated final-model charts without overwriting generic backtest outputs.
+
+### `scripts/99_clean_outputs.py`
+
+Lists or deletes generated outputs under `outputs/tables/`, `outputs/reports/`, and `outputs/charts/` while preserving raw API caches and feature data by default.
+
 ### `scripts/05_run_backtest.py`
 
 Runs multiple strategy variants for a chosen holding period:
@@ -144,7 +173,7 @@ Runs multiple strategy variants for a chosen holding period:
 - `strict_checklist_model`
 - `technical_only`
 - `technical_momentum_model`
-- `analyst_only`
+- `analyst_snapshot_model`
 
 It can also optionally run a condition-based exit backtest for checklist-style strategies.
 
@@ -200,6 +229,7 @@ Primary expected outputs:
 - `outputs/reports/ml_model_summary.md`
 - `outputs/reports/sentiment_model_comparison.md`
 - `outputs/reports/sentiment_model_comparison_1y.md`
+- `outputs/reports/final_quant_model_1y_report.md`
 
 ## Notes On Interpretation
 
@@ -213,12 +243,16 @@ Primary expected outputs:
 - API responses are cached under `data/raw/`.
 - Processed CSV files are saved under `data/processed/`.
 - Feature panels are saved under `data/final/`.
+- The default `START_DATE` and `END_DATE` now focus on the most recent one-year window for faster reruns.
 - By default, sentiment fetching only uses a 1-year window.
 - To fetch the full historical period, pass explicit `--start-date` and `--end-date`.
 - To avoid API calls, rerun scripts without `--force`.
 - To force a refetch, pass `--force`.
 - `scripts/00_cache_status.py` shows what is already cached.
 - `scripts/15_run_fast_sentiment_backtest.py` runs a quick 1-year sentiment test.
+- `scripts/20_run_final_quant_model_1y.py` runs the final one-year strategy comparison.
+- `scripts/99_clean_outputs.py --list` shows what old generated outputs would be removed.
+- `scripts/99_clean_outputs.py --outputs-only --yes` clears old generated outputs while keeping caches.
 
 ## News Sentiment Pipeline
 
@@ -252,3 +286,24 @@ The default implementation spaces requests to stay under those ceilings during s
 - `holding_period_days` controls both the forward-return horizon and the rebalance frequency.
 - `21`-day and `63`-day returns are not compounded weekly in the corrected engine.
 - Annualization uses `252 / holding_period_days`, not a fixed weekly constant.
+
+## Historical Analyst Grades
+
+Snapshot analyst target data is not point-in-time and remains exploratory in this project.
+
+If your FMP plan exposes dated grade events, the project can fetch historical FMP analyst grade records and build point-in-time historical analyst features from them. These features only use grade events available on or before each rebalance date, which makes them better suited for historical analyst claims than current snapshot price-target consensus.
+
+Historical grade features are not the same thing as true historical price-target consensus. They capture dated analyst rating actions such as upgrades, downgrades, and maintained ratings. If the FMP historical grade endpoint is blocked by your plan or unavailable for a ticker, the historical-grade strategies are skipped with a clear message.
+
+Important caveat: analyst-driven snapshot results use FMP data as a current snapshot merged across historical dates unless true point-in-time analyst history is provided. These results should be treated as research exploration, not a valid historical analyst-signal backtest.
+
+## Final One-Year Quant Model
+
+The `final_quant_model_1y` family is the project’s best-effort honest one-year workflow. It blends:
+
+- FMP snapshot analyst target consensus and price target summary features
+- EODHD technical and momentum features
+- Alpha Vantage sentiment features
+- FMP historical analyst-grade event overlays when available
+
+The best-performing one-year result may still be exploratory if it relies on snapshot analyst targets. The final report therefore labels analyst data mode explicitly and states whether the top result is historically cleaner or still snapshot-driven.

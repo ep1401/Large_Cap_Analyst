@@ -32,6 +32,7 @@ def main() -> None:
     args = parser.parse_args()
 
     config = Config.from_env()
+    print(config.describe_analysis_windows())
     if not args.dry_run and not config.alpha_vantage_api_key:
         raise SystemExit("ALPHA_VANTAGE_API_KEY is missing. Add it to .env before fetching Alpha Vantage news.")
     if args.start_date and args.end_date:

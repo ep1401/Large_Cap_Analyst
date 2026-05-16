@@ -194,6 +194,19 @@ def build_analyst_snapshot(
 
         target_7d = _extract_float(summary, ["last7DaysAverage", "average7Days", "target7d"])
         target_30d = _extract_float(summary, ["last30DaysAverage", "average30Days", "target30d", "lastMonthAvgPriceTarget"])
+        last_month_count = _extract_float(summary, ["lastMonthCount"])
+        last_month_avg_price_target = _extract_float(summary, ["lastMonthAvgPriceTarget"])
+        last_quarter_count = _extract_float(summary, ["lastQuarterCount"])
+        last_quarter_avg_price_target = _extract_float(summary, ["lastQuarterAvgPriceTarget"])
+        last_year_count = _extract_float(summary, ["lastYearCount"])
+        last_year_avg_price_target = _extract_float(summary, ["lastYearAvgPriceTarget"])
+        all_time_count = _extract_float(summary, ["allTimeCount"])
+        all_time_avg_price_target = _extract_float(summary, ["allTimeAvgPriceTarget"])
+        publishers = summary.get("publishers")
+        if isinstance(publishers, list):
+            analyst_publishers = ",".join(str(item).strip() for item in publishers if str(item).strip())
+        else:
+            analyst_publishers = str(publishers or "").strip()
 
         def upside(target: float | None) -> float | None:
             if target is None or close_proxy in (None, 0):
@@ -213,6 +226,19 @@ def build_analyst_snapshot(
                 "consensus_upside": upside(consensus_target),
                 "low_target_upside": upside(low_target),
                 "high_target_upside": upside(high_target),
+                "last_month_target_count": last_month_count,
+                "last_month_avg_price_target": last_month_avg_price_target,
+                "last_quarter_target_count": last_quarter_count,
+                "last_quarter_avg_price_target": last_quarter_avg_price_target,
+                "last_year_target_count": last_year_count,
+                "last_year_avg_price_target": last_year_avg_price_target,
+                "all_time_target_count": all_time_count,
+                "all_time_avg_price_target": all_time_avg_price_target,
+                "analyst_publishers": analyst_publishers,
+                "last_month_target_upside": upside(last_month_avg_price_target),
+                "last_quarter_target_upside": upside(last_quarter_avg_price_target),
+                "last_year_target_upside": upside(last_year_avg_price_target),
+                "all_time_target_upside": upside(all_time_avg_price_target),
                 "target_spread": (
                     (high_target - low_target) / close_proxy
                     if None not in (high_target, low_target, close_proxy) and close_proxy != 0
@@ -226,7 +252,7 @@ def build_analyst_snapshot(
         )
 
     df = pd.DataFrame(rows).sort_values("ticker").reset_index(drop=True)
-    numeric_columns = [column for column in df.columns if column not in {"date", "ticker", "snapshot_mode"}]
+    numeric_columns = [column for column in df.columns if column not in {"date", "ticker", "snapshot_mode", "analyst_publishers"}]
     df[numeric_columns] = df[numeric_columns].apply(pd.to_numeric, errors="coerce")
     save_dataframe(processed_output_path, df)
     return df

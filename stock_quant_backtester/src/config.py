@@ -37,6 +37,8 @@ class Config:
     initial_capital: float
     top_n: int
     transaction_cost_bps: float
+    min_avg_dollar_volume: float
+    analyst_count_threshold: int
     eodhd_calls_per_minute: int
     fmp_calls_per_minute: int
     alpha_vantage_requests_per_minute: int
@@ -87,7 +89,7 @@ class Config:
             eodhd_api_key=os.getenv("EODHD_API_KEY", ""),
             fmp_api_key=os.getenv("FMP_API_KEY", ""),
             alpha_vantage_api_key=os.getenv("ALPHA_VANTAGE_API_KEY", ""),
-            start_date=os.getenv("START_DATE", "2023-01-01"),
+            start_date=os.getenv("START_DATE", "2025-01-01"),
             end_date=end_date,
             sentiment_start_date=sentiment_start_date,
             sentiment_end_date=sentiment_end_date,
@@ -99,6 +101,8 @@ class Config:
             initial_capital=float(os.getenv("INITIAL_CAPITAL", "10000")),
             top_n=int(os.getenv("TOP_N", "10")),
             transaction_cost_bps=float(os.getenv("TRANSACTION_COST_BPS", "10")),
+            min_avg_dollar_volume=float(os.getenv("MIN_AVG_DOLLAR_VOLUME", "20000000")),
+            analyst_count_threshold=int(os.getenv("ANALYST_COUNT_THRESHOLD", "10")),
             eodhd_calls_per_minute=int(os.getenv("EODHD_CALLS_PER_MINUTE", "1000")),
             fmp_calls_per_minute=int(os.getenv("FMP_CALLS_PER_MINUTE", "300")),
             alpha_vantage_requests_per_minute=int(os.getenv("ALPHA_VANTAGE_REQUESTS_PER_MINUTE", "60")),
@@ -118,12 +122,23 @@ class Config:
     def sentiment_window_label(self) -> str:
         return f"{self.sentiment_start_date}_{self.sentiment_end_date}"
 
+    @property
+    def analysis_window_label(self) -> str:
+        return f"{self.start_date}_{self.end_date}"
+
+    def describe_analysis_windows(self) -> str:
+        return (
+            f"Analysis window: {self.start_date} to {self.end_date} | "
+            f"Sentiment window: {self.sentiment_start_date} to {self.sentiment_end_date}"
+        )
+
     def ensure_directories(self) -> None:
         for path in (
             self.raw_dir / "prices",
             self.raw_dir / "prices" / "eodhd",
             self.raw_dir / "analyst",
             self.raw_dir / "analyst" / "fmp",
+            self.raw_dir / "analyst" / "fmp_historical_grades",
             self.raw_dir / "news",
             self.raw_dir / "news" / "alpha_vantage",
             self.processed_dir,

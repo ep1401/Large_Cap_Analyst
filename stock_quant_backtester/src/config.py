@@ -30,6 +30,14 @@ class Config:
     sentiment_start_date: str
     sentiment_end_date: str
     sentiment_lookback_years: int
+    full_backtest_start_date: str
+    full_backtest_end_date: str
+    full_sentiment_start_date: str
+    full_sentiment_end_date: str
+    full_run_force_refresh: bool
+    full_run_clear_cache: bool
+    full_run_clear_outputs: bool
+    historical_analyst_lookback_days: int
     cache_enabled: bool
     force_refresh: bool
     news_provider: str
@@ -65,6 +73,10 @@ class Config:
         sentiment_start_override = os.getenv("SENTIMENT_START_DATE")
         sentiment_end_override = os.getenv("SENTIMENT_END_DATE")
         sentiment_lookback_years = int(os.getenv("SENTIMENT_LOOKBACK_YEARS", "1"))
+        full_backtest_start_date = os.getenv("FULL_BACKTEST_START_DATE", "2023-01-01")
+        full_backtest_end_date = os.getenv("FULL_BACKTEST_END_DATE", "2026-01-01")
+        full_sentiment_start_date = os.getenv("FULL_SENTIMENT_START_DATE", full_backtest_start_date)
+        full_sentiment_end_date = os.getenv("FULL_SENTIMENT_END_DATE", full_backtest_end_date)
 
         if sentiment_start_override and sentiment_end_override:
             sentiment_start_date = sentiment_start_override
@@ -94,6 +106,14 @@ class Config:
             sentiment_start_date=sentiment_start_date,
             sentiment_end_date=sentiment_end_date,
             sentiment_lookback_years=sentiment_lookback_years,
+            full_backtest_start_date=full_backtest_start_date,
+            full_backtest_end_date=full_backtest_end_date,
+            full_sentiment_start_date=full_sentiment_start_date,
+            full_sentiment_end_date=full_sentiment_end_date,
+            full_run_force_refresh=env_bool("FULL_RUN_FORCE_REFRESH", False),
+            full_run_clear_cache=env_bool("FULL_RUN_CLEAR_CACHE", False),
+            full_run_clear_outputs=env_bool("FULL_RUN_CLEAR_OUTPUTS", True),
+            historical_analyst_lookback_days=int(os.getenv("HISTORICAL_ANALYST_LOOKBACK_DAYS", "365")),
             cache_enabled=env_bool("CACHE_ENABLED", True),
             force_refresh=env_bool("FORCE_REFRESH", False),
             news_provider=os.getenv("NEWS_PROVIDER", "alpha_vantage"),
@@ -125,6 +145,10 @@ class Config:
     @property
     def analysis_window_label(self) -> str:
         return f"{self.start_date}_{self.end_date}"
+
+    @property
+    def full_analysis_window_label(self) -> str:
+        return f"{self.full_backtest_start_date}_{self.full_backtest_end_date}"
 
     def describe_analysis_windows(self) -> str:
         return (

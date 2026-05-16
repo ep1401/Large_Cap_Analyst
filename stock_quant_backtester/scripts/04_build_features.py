@@ -4,6 +4,8 @@ import argparse
 from pathlib import Path
 import sys
 
+import pandas as pd
+
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from src.build_features import build_feature_panel
@@ -14,32 +16,56 @@ from src.utils import str_to_bool
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--use-current-snapshot-analyst", default="true")
+    parser.add_argument("--start-date", default=None)
+    parser.add_argument("--end-date", default=None)
     args = parser.parse_args()
 
     config = Config.from_env()
-    print(config.describe_analysis_windows())
     prices_path = config.processed_dir / "prices_all.csv"
     if not prices_path.exists():
         raise SystemExit("Missing data/processed/prices_all.csv. Run scripts/01_fetch_prices.py before building features.")
+    start_date = args.start_date or config.start_date
+    end_date = args.end_date or config.end_date
+    window_label = f"{start_date}_{end_date}"
+    sentiment_path = config.processed_dir / f"news_sentiment_daily_{window_label}.csv"
+    if not sentiment_path.exists():
+        sentiment_path = config.processed_dir / "news_sentiment_daily.csv"
+    print(f"Feature panel window: {start_date} to {end_date}")
     features = build_feature_panel(
         prices_path=prices_path,
         universe_path=config.universe_path,
         analyst_path=config.processed_dir / "analyst_features.csv",
-        sentiment_path=config.processed_dir / "news_sentiment_daily.csv",
+        sentiment_path=sentiment_path,
         historical_rating_counts_path=config.processed_dir / "historical_analyst_rating_counts.csv",
         historical_grade_events_path=config.processed_dir / "historical_analyst_grade_events.csv",
         historical_rating_count_features_output_path=config.processed_dir / "historical_rating_count_features.csv",
         historical_grade_features_output_path=config.processed_dir / "historical_grade_features.csv",
         output_path=config.final_dir / "features_panel.csv",
+        start_date=start_date,
+        end_date=end_date,
         benchmark_ticker=config.benchmark,
         use_current_snapshot_analyst=str_to_bool(args.use_current_snapshot_analyst),
     )
-    sentiment_panel = features.loc[
-        (features["date"] >= config.sentiment_start_ts) & (features["date"] < config.sentiment_end_ts)
-    ].copy()
-    sentiment_panel.to_csv(config.final_dir / "features_panel_sentiment_1y.csv", index=False)
+    features.to_csv(config.final_dir / f"features_panel_{window_label}.csv", index=False)
+    sentiment_panel = features.loc[(features["date"] >= pd.Timestamp(start_date)) & (features["date"] < pd.Timestamp(end_date))].copy()
+    sentiment_panel.to_csv(config.final_dir / f"features_panel_sentiment_{window_label}.csv", index=False)
+    sentiment_rows_with_data = float(features["article_count_30d"].fillna(0).gt(0).mean()) if "article_count_30d" in features.columns else 0.0
+    historical_rows_with_data = float(features["historical_rating_count_data_available"].fillna(False).mean()) if "historical_rating_count_data_available" in features.columns else 0.0
+    sentiment_min_date = features.loc[features["article_count_30d"].fillna(0).gt(0), "date"].min() if "article_count_30d" in features.columns else pd.NaT
+    sentiment_max_date = features.loc[features["article_count_30d"].fillna(0).gt(0), "date"].max() if "article_count_30d" in features.columns else pd.NaT
+    historical_min_date = features.loc[features["historical_rating_count_data_available"].fillna(False), "historical_rating_record_date"].min() if "historical_rating_record_date" in features.columns else pd.NaT
+    historical_max_date = features.loc[features["historical_rating_count_data_available"].fillna(False), "historical_rating_record_date"].max() if "historical_rating_record_date" in features.columns else pd.NaT
     print(f"Saved features rows: {len(features)}")
-    print(f"Saved 1-year sentiment feature rows: {len(sentiment_panel)}")
+    print(f"Saved window-specific feature rows: {len(sentiment_panel)}")
+    print(f"Feature panel min date: {features['date'].min().date() if not features.empty else 'n/a'}")
+    print(f"Feature panel max date: {features['date'].max().date() if not features.empty else 'n/a'}")
+    print(f"Number of tickers: {features['ticker'].nunique() if not features.empty else 0}")
+    print(f"Sentiment min date: {sentiment_min_date.date() if pd.notna(sentiment_min_date) else 'n/a'}")
+    print(f"Sentiment max date: {sentiment_max_date.date() if pd.notna(sentiment_max_date) else 'n/a'}")
+    print(f"Historical rating count min date: {historical_min_date.date() if pd.notna(historical_min_date) else 'n/a'}")
+    print(f"Historical rating count max date: {historical_max_date.date() if pd.notna(historical_max_date) else 'n/a'}")
+    print(f"Percent rows with sentiment data: {sentiment_rows_with_data:.2%}")
+    print(f"Percent rows with historical rating count data: {historical_rows_with_data:.2%}")
 
 
 if __name__ == "__main__":

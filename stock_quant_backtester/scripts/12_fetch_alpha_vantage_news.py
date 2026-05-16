@@ -32,7 +32,6 @@ def main() -> None:
     args = parser.parse_args()
 
     config = Config.from_env()
-    print(config.describe_analysis_windows())
     if not args.dry_run and not config.alpha_vantage_api_key:
         raise SystemExit("ALPHA_VANTAGE_API_KEY is missing. Add it to .env before fetching Alpha Vantage news.")
     if args.start_date and args.end_date:
@@ -68,11 +67,14 @@ def main() -> None:
         requests_per_minute=requests_per_minute,
     )
 
-    print(f"Tickers: {plan['tickers']}")
-    print(f"Months: {plan['months']}")
-    print(f"Total possible requests: {plan['total_possible_requests']}")
-    print(f"Already cached: {plan['cached_requests']}")
-    print(f"Requiring API calls: {plan['missing_requests']}")
+    print(f"Requested sentiment start date: {start_date}")
+    print(f"Requested sentiment end date: {end_date}")
+    print(f"Number of months: {plan['months']}")
+    print(f"Number of tickers: {plan['tickers']}")
+    print(f"Expected ticker-month files: {plan['total_possible_requests']}")
+    print(f"Cached ticker-month files: {plan['cached_requests']}")
+    print(f"Missing ticker-month files: {plan['missing_requests']}")
+    print(f"Estimated API calls: {plan['missing_requests']}")
     print(f"Estimated runtime (minutes): {plan['estimated_runtime_minutes']:.2f}")
 
     if args.dry_run:

@@ -228,6 +228,8 @@ def build_news_sentiment_outputs(
     articles_output_path: str | Path,
     daily_output_path: str | Path,
     *,
+    start_date: str | None = None,
+    end_date: str | None = None,
     force: bool = False,
     rescore_with_finbert: bool = False,
     prefer_finbert: bool = False,
@@ -237,13 +239,17 @@ def build_news_sentiment_outputs(
     required_article_columns = {"provider_relevance_score"}
     required_daily_columns = {"relevance_weighted_sentiment_1d"}
 
-    if articles_output_path.exists() and daily_output_path.exists() and not force:
+    if start_date is None and end_date is None and articles_output_path.exists() and daily_output_path.exists() and not force:
         articles_df = load_dataframe(articles_output_path, parse_dates=["published_date", "date"])
         daily_df = load_dataframe(daily_output_path, parse_dates=["date"])
         if required_article_columns.issubset(articles_df.columns) and required_daily_columns.issubset(daily_df.columns):
             return articles_df, daily_df
 
     news_df = load_dataframe(news_input_path, parse_dates=["published_date", "date"])
+    if start_date is not None:
+        news_df = news_df.loc[news_df["date"] >= pd.Timestamp(start_date)].copy()
+    if end_date is not None:
+        news_df = news_df.loc[news_df["date"] < pd.Timestamp(end_date)].copy()
     if news_df.empty:
         empty_articles = pd.DataFrame(
             columns=[

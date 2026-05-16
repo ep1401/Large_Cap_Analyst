@@ -12,7 +12,14 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 from src.backtest import run_weekly_backtest, select_rebalance_dates
 from src.config import Config
 from src.metrics import calculate_performance_metrics
-from src.scoring import strategy_analyst_data_mode
+from src.scoring import (
+    strategy_analyst_data_mode,
+    strategy_historical_validity_group,
+    strategy_uses_historical_grade_events,
+    strategy_uses_historical_ratings,
+    strategy_uses_sentiment,
+    strategy_uses_snapshot_fields,
+)
 from src.utils import load_dataframe, save_dataframe
 
 
@@ -103,7 +110,12 @@ def _metrics_row(strategy_name: str, weekly: pd.DataFrame, *, holding_period_day
     test = safe_metrics(_slice_period(weekly, start=TEST_START))
     return {
         "strategy_name": strategy_name,
+        "historical_validity_group": strategy_historical_validity_group(strategy_name),
         "analyst_data_mode": strategy_analyst_data_mode(strategy_name),
+        "uses_snapshot_fields": strategy_uses_snapshot_fields(strategy_name),
+        "uses_sentiment": strategy_uses_sentiment(strategy_name),
+        "uses_historical_ratings": strategy_uses_historical_ratings(strategy_name),
+        "uses_historical_grade_events": strategy_uses_historical_grade_events(strategy_name),
         "holding_period_days": holding_period_days,
         "top_n": top_n,
         "require_positive_sentiment": require_positive_sentiment,

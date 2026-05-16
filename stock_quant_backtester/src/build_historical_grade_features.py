@@ -61,13 +61,16 @@ def _prepare_events(grades_df: pd.DataFrame) -> pd.DataFrame:
         axis=1,
         result_type="expand",
     )
+    duplicate_derived_columns = [column for column in derived.columns if column in enriched.columns]
+    if duplicate_derived_columns:
+        enriched = enriched.drop(columns=duplicate_derived_columns)
     enriched = pd.concat([enriched, derived], axis=1)
     enriched["event_count"] = 1.0
-    enriched["upgrade_count"] = enriched["is_upgrade"].astype(float)
-    enriched["downgrade_count"] = enriched["is_downgrade"].astype(float)
-    enriched["maintain_count"] = enriched["is_maintain"].astype(float)
-    enriched["positive_grade_count"] = enriched["is_positive_grade"].astype(float)
-    enriched["negative_grade_count"] = enriched["is_negative_grade"].astype(float)
+    enriched["upgrade_count"] = enriched["is_upgrade"].fillna(False).astype(float)
+    enriched["downgrade_count"] = enriched["is_downgrade"].fillna(False).astype(float)
+    enriched["maintain_count"] = enriched["is_maintain"].fillna(False).astype(float)
+    enriched["positive_grade_count"] = enriched["is_positive_grade"].fillna(False).astype(float)
+    enriched["negative_grade_count"] = enriched["is_negative_grade"].fillna(False).astype(float)
     enriched["new_grade_score_value"] = pd.to_numeric(enriched["new_grade_score"], errors="coerce")
     enriched["grade_delta_value"] = pd.to_numeric(enriched["grade_delta"], errors="coerce")
     enriched["new_grade_score_sum"] = enriched["new_grade_score_value"].fillna(0.0)

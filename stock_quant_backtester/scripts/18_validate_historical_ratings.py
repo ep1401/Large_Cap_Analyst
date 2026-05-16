@@ -8,31 +8,14 @@ import pandas as pd
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from src.config import Config
-from src.scoring import SNAPSHOT_ANALYST_STRATEGIES, strategy_analyst_data_mode
+from src.scoring import (
+    NO_SNAPSHOT_STRATEGIES,
+    SNAPSHOT_ANALYST_STRATEGIES,
+    SNAPSHOT_FIELD_COLUMNS,
+    strategy_analyst_data_mode,
+    strategy_score_fields,
+)
 from src.utils import load_dataframe
-
-
-NO_SNAPSHOT_STRATEGIES = {
-    "historical_rating_counts_model",
-    "historical_rating_counts_plus_sentiment",
-    "historical_rating_counts_plus_events",
-    "historical_rating_counts_plus_events_sentiment",
-    "final_quant_model_1y_no_snapshot",
-}
-SNAPSHOT_FIELDS = {
-    "consensus_upside",
-    "low_target_upside",
-    "high_target_upside",
-    "median_target",
-    "last_month_target_upside",
-    "last_quarter_target_upside",
-    "last_year_target_upside",
-    "all_time_target_upside",
-    "last_month_avg_price_target",
-    "last_quarter_avg_price_target",
-    "last_year_avg_price_target",
-    "all_time_avg_price_target",
-}
 
 
 def _validate_asof_logic(features: pd.DataFrame, rating_counts: pd.DataFrame) -> list[str]:
@@ -88,12 +71,7 @@ def main() -> None:
         raise SystemExit(f"Missing historical rating-count feature columns: {missing_columns}")
 
     failures = _validate_asof_logic(features, rating_counts)
-    scoring_source = (Path(__file__).resolve().parents[1] / "src" / "scoring.py").read_text(encoding="utf-8")
-    final_no_snapshot_block = scoring_source.split('elif strategy_name == "final_quant_model_1y_no_snapshot":', 1)[1].split(
-        'elif strategy_name == "final_quant_model_1y_no_sentiment":',
-        1,
-    )[0]
-    leaked_snapshot_fields = sorted(field for field in SNAPSHOT_FIELDS if field in final_no_snapshot_block)
+    leaked_snapshot_fields = sorted(strategy_score_fields("final_quant_model_1y_no_snapshot") & SNAPSHOT_FIELD_COLUMNS)
     if leaked_snapshot_fields:
         failures.append(f"final_quant_model_1y_no_snapshot references snapshot fields: {leaked_snapshot_fields}")
 
@@ -107,6 +85,7 @@ def main() -> None:
         "historical_rating_counts_plus_events": "historical_rating_counts_plus_events",
         "historical_rating_counts_plus_events_sentiment": "historical_rating_counts_plus_events_sentiment",
         "final_quant_model_1y_no_snapshot": "historical_rating_counts_plus_events_sentiment",
+        "final_quant_model_no_snapshot": "historical_rating_counts_plus_events_sentiment",
     }
     for strategy_name, expected_mode in expected_modes.items():
         if strategy_analyst_data_mode(strategy_name) != expected_mode:
@@ -122,7 +101,7 @@ def main() -> None:
     print("Historical ratings validation summary")
     print(f"- sampled rows: {min(25, len(features.loc[features['ticker'] != config.benchmark]))}")
     print(f"- checked no-snapshot strategies: {', '.join(sorted(NO_SNAPSHOT_STRATEGIES))}")
-    print(f"- validated snapshot fields excluded from final_quant_model_1y_no_snapshot: {', '.join(sorted(SNAPSHOT_FIELDS))}")
+    print(f"- validated snapshot fields excluded from final_quant_model_1y_no_snapshot: {', '.join(sorted(SNAPSHOT_FIELD_COLUMNS))}")
     print(f"- failures: {len(failures)}")
     if failures:
         print("- status: FAIL")

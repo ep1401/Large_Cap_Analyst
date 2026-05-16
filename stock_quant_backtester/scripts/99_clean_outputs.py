@@ -23,7 +23,7 @@ def _delete_files(paths: list[Path]) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--outputs-only", action="store_true", default=True)
+    parser.add_argument("--outputs-only", action="store_true")
     parser.add_argument("--include-processed", action="store_true")
     parser.add_argument("--include-final", action="store_true")
     parser.add_argument("--include-raw-cache", action="store_true")
@@ -32,7 +32,6 @@ def main() -> None:
     args = parser.parse_args()
 
     config = Config.from_env()
-    print(config.describe_analysis_windows())
 
     targets: list[tuple[str, Path]] = [
         ("outputs/tables", config.tables_dir),
@@ -62,6 +61,8 @@ def main() -> None:
 
     if args.include_raw_cache and not args.yes:
         raise SystemExit("Refusing to delete raw API cache without --yes.")
+    if (args.include_processed or args.include_final) and not args.yes:
+        raise SystemExit("Pass --yes to delete processed or final datasets.")
     if not args.yes:
         raise SystemExit("Pass --yes to delete the listed files.")
 

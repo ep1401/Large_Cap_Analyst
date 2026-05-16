@@ -288,6 +288,8 @@ def build_feature_panel(
     historical_grade_events_path: str | Path | None = None,
     historical_rating_count_features_output_path: str | Path | None = None,
     historical_grade_features_output_path: str | Path | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
     benchmark_ticker: str = "SPY",
     use_current_snapshot_analyst: bool = False,
 ) -> pd.DataFrame:
@@ -351,9 +353,8 @@ def build_feature_panel(
     losses = -delta.clip(upper=0)
     avg_gain = gains.groupby(price_features["ticker"]).transform(lambda s: s.rolling(14).mean())
     avg_loss = losses.groupby(price_features["ticker"]).transform(lambda s: s.rolling(14).mean())
-    rs = avg_gain / avg_loss.replace(0, pd.NA)
-    price_features["rsi_14"] = 100 - (100 / (1 + rs))
-    price_features["rsi_14"] = price_features["rsi_14"].fillna(50.0)
+    rs = avg_gain / avg_loss.replace(0, np.nan)
+    price_features["rsi_14"] = pd.to_numeric(100 - (100 / (1 + rs)), errors="coerce").fillna(50.0)
 
     benchmark = (
         price_features.loc[
@@ -506,5 +507,9 @@ def build_feature_panel(
         "analyst_data_mode",
     ]
     features = features[final_columns].sort_values(["date", "ticker"]).reset_index(drop=True)
+    if start_date is not None:
+        features = features.loc[features["date"] >= pd.Timestamp(start_date)].copy()
+    if end_date is not None:
+        features = features.loc[features["date"] < pd.Timestamp(end_date)].copy()
     save_dataframe(output_path, features)
     return features

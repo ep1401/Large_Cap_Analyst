@@ -73,6 +73,7 @@ python scripts/15_run_fast_sentiment_backtest.py
 python scripts/17_compare_historical_analyst_models.py
 python scripts/18_validate_historical_ratings.py
 python scripts/20_run_final_quant_model_1y.py
+python scripts/30_run_full_3y_rebuild.py --dry-run
 python scripts/99_clean_outputs.py --list
 python scripts/07_grid_search.py
 python scripts/06_generate_report.py
@@ -163,6 +164,10 @@ Samples ticker/date rows from the feature panel and confirms the `grades-histori
 ### `scripts/20_run_final_quant_model_1y.py`
 
 Runs the finalized one-year quant comparison across snapshot analyst, technical, sentiment-aware, and hybrid final-model variants. It saves dated comparison tables, a final report, and dedicated final-model charts without overwriting generic backtest outputs.
+
+### `scripts/30_run_full_3y_rebuild.py`
+
+Runs the full 3-year rebuild workflow end to end. It prints cache/runtime estimates, optionally clears outputs, optionally clears caches only with `--clear-cache --yes`, fetches all required API data, rebuilds processed datasets and features, validates historical ratings, runs full-period backtests for `5`, `21`, and `63` day horizons, and writes dated full-run reports that separate historically safer models from snapshot/exploratory analyst models.
 
 ### `scripts/99_clean_outputs.py`
 

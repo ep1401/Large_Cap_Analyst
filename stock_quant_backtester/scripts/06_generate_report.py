@@ -16,6 +16,9 @@ IMPORTANT_CAVEAT = (
     "across historical dates unless true point-in-time analyst history is provided. These results "
     "should be treated as research exploration, not a valid historical analyst-signal backtest."
 )
+HISTORICAL_RATING_NOTE = (
+    "Historical rating-count features are built from dated FMP grades-historical records and use only the latest record available on or before each rebalance date."
+)
 
 
 def _format_pct(value: float) -> str:
@@ -52,7 +55,7 @@ def main() -> None:
     analyst_mode = (
         features["analyst_data_mode"].dropna().iloc[0]
         if "analyst_data_mode" in features.columns and features["analyst_data_mode"].notna().any()
-        else "historical_backtest_without_analyst"
+        else "none"
     )
     full_model_full = comparison_full.loc[comparison_full["strategy_name"] == "full_model"].iloc[0]
     full_model_test = comparison_test.loc[comparison_test["strategy_name"] == "full_model"].iloc[0]
@@ -121,7 +124,12 @@ def main() -> None:
         "## Analyst Data Mode",
         f"- Analyst data mode: {analyst_mode}",
         f"- Point-in-time analyst history available: {bool(full_model_full['analyst_data_is_point_in_time'])}",
+        f"- {HISTORICAL_RATING_NOTE}",
         f"- {IMPORTANT_CAVEAT}",
+        "",
+        "## Analyst Signal Interpretation",
+        "- Historically valid analyst signals: `grades-historical` rating-count snapshots and dated `grades` action events.",
+        "- Exploratory analyst signals: `price-target-consensus`, `price-target-summary`, `consensus_upside`, `low_target_upside`, `last_month_target_upside`, `last_quarter_target_upside`, and `last_year_target_upside`.",
         "",
         "## Benchmark Validation",
         f"- First rebalance date: {validation['first_rebalance_date'].iloc[0]}",

@@ -18,7 +18,9 @@ def _print_processed_status(config: Config) -> None:
     for name in [
         "prices_all.csv",
         "analyst_features.csv",
-        "historical_analyst_grades.csv",
+        "historical_analyst_rating_counts.csv",
+        "historical_analyst_grade_events.csv",
+        "historical_rating_count_features.csv",
         "historical_grade_features.csv",
         "stock_news_alpha_vantage.csv",
         "stock_news.csv",
@@ -87,19 +89,17 @@ def main() -> None:
 
     historical_dir = config.raw_dir / "analyst" / "fmp_historical_grades"
     historical_files = list(historical_dir.glob("*.json"))
-    historical_tickers = sorted({path.stem for path in historical_files})
+    historical_tickers = sorted({path.name.replace("_grades_historical.json", "").replace("_grades_events.json", "") for path in historical_files})
     missing_historical_tickers = sorted(set(tickers) - set(historical_tickers))
     historical_blocked = 0
     historical_errors = 0
     for path in historical_files:
         with path.open("r", encoding="utf-8") as handle:
             payload = json.load(handle)
-        for key in ["grades_endpoint", "grades_historical_endpoint"]:
-            endpoint_payload = payload.get(key, {})
-            if isinstance(endpoint_payload, dict) and endpoint_payload.get("error"):
-                historical_errors += 1
-                if endpoint_payload.get("status_code") in {402, 403}:
-                    historical_blocked += 1
+        if isinstance(payload, dict) and payload.get("error"):
+            historical_errors += 1
+            if payload.get("status_code") in {402, 403}:
+                historical_blocked += 1
     print("- FMP historical grade cache:")
     print(f"  - number of tickers cached: {len(historical_tickers)}")
     print(f"  - missing tickers: {', '.join(missing_historical_tickers) if missing_historical_tickers else 'none'}")

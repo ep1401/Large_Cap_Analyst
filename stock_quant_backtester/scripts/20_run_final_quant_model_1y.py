@@ -185,7 +185,9 @@ def main() -> None:
             universe_path=config.universe_path,
             analyst_path=config.processed_dir / "analyst_features.csv",
             sentiment_path=sentiment_daily_path,
-            historical_grades_path=config.processed_dir / "historical_analyst_grades.csv",
+            historical_rating_counts_path=config.processed_dir / "historical_analyst_rating_counts.csv",
+            historical_grade_events_path=config.processed_dir / "historical_analyst_grade_events.csv",
+            historical_rating_count_features_output_path=config.processed_dir / "historical_rating_count_features.csv",
             historical_grade_features_output_path=config.processed_dir / "historical_grade_features.csv",
             output_path=features_path,
             benchmark_ticker=config.benchmark,
@@ -201,9 +203,9 @@ def main() -> None:
         "sentiment_data_mode" in features.columns
         and not features["sentiment_data_mode"].fillna("").eq("missing_news_sentiment").all()
     )
-    has_historical_grades = (
-        "historical_grade_data_available" in features.columns
-        and features["historical_grade_data_available"].fillna(False).any()
+    has_historical_ratings = (
+        "historical_rating_count_data_available" in features.columns
+        and features["historical_rating_count_data_available"].fillna(False).any()
     )
 
     strategy_specs = [
@@ -218,10 +220,10 @@ def main() -> None:
         {"strategy_name": "final_quant_model_1y_sector_capped", "use_analyst_filters": True, "max_names_per_sector": 3},
     ]
     skipped_models: list[str] = []
-    if has_sentiment and has_historical_grades:
+    if has_sentiment and has_historical_ratings:
         strategy_specs.append({"strategy_name": "final_quant_model_1y_no_snapshot", "use_analyst_filters": False, "max_names_per_sector": None})
     else:
-        skipped_models.append("final_quant_model_1y_no_snapshot (requires sentiment and historical analyst grade features)")
+        skipped_models.append("final_quant_model_1y_no_snapshot (requires sentiment and historical analyst rating-count features)")
 
     comparison_rows: list[dict] = []
     curve_rows: list[pd.DataFrame] = []
@@ -364,7 +366,7 @@ def main() -> None:
         "",
         f"- Analysis window: {start_date} to {end_date}",
         "- Evaluation mode: short-sample evaluation",
-        f"- Historical grade data available: {has_historical_grades}",
+        f"- Historical rating-count data available: {has_historical_ratings}",
         f"- Sentiment data available: {has_sentiment}",
         "",
         "## Model Selection Summary",

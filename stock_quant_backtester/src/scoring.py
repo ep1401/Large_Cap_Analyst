@@ -19,6 +19,8 @@ SENTIMENT_STRATEGIES = {
     "analyst_sentiment_model",
     "technical_sentiment_model",
     "historical_grades_plus_sentiment",
+    "historical_rating_counts_plus_sentiment",
+    "historical_rating_counts_plus_events_sentiment",
     "final_quant_model_1y_no_snapshot",
 }
 SNAPSHOT_ANALYST_STRATEGIES = {
@@ -38,6 +40,14 @@ HISTORICAL_GRADE_STRATEGIES = {
     "historical_grades_model",
     "historical_grades_plus_sentiment",
     "strict_historical_grades_checklist",
+    "historical_rating_counts_plus_events",
+    "historical_rating_counts_plus_events_sentiment",
+}
+HISTORICAL_RATING_COUNT_STRATEGIES = {
+    "historical_rating_counts_model",
+    "historical_rating_counts_plus_sentiment",
+    "historical_rating_counts_plus_events",
+    "historical_rating_counts_plus_events_sentiment",
     "final_quant_model_1y_no_snapshot",
 }
 SENTIMENT_COLUMNS = [
@@ -64,6 +74,22 @@ HISTORICAL_GRADE_COLUMNS = [
     "recent_downgrade_flag_30d",
     "historical_grade_data_available",
 ]
+HISTORICAL_RATING_COUNT_COLUMNS = [
+    "historical_rating_count_data_available",
+    "historical_total_ratings",
+    "historical_positive_rating_ratio",
+    "historical_negative_rating_ratio",
+    "historical_neutral_rating_ratio",
+    "historical_buy_hold_sell_score",
+    "historical_rating_score",
+    "historical_rating_score_change_30d",
+    "historical_rating_score_change_90d",
+    "historical_positive_ratio_change_30d",
+    "historical_negative_ratio_change_30d",
+    "historical_negative_rating_increase_30d",
+    "historical_positive_rating_increase_30d",
+    "days_since_historical_rating_update",
+]
 SCORE_INPUT_COLUMNS = [
     "consensus_upside",
     "low_target_upside",
@@ -87,6 +113,8 @@ SCORE_INPUT_COLUMNS = [
     "beta_to_spy_63d",
     "above_sma_50",
     "above_sma_200",
+    *HISTORICAL_RATING_COUNT_COLUMNS,
+    *HISTORICAL_GRADE_COLUMNS,
     *SENTIMENT_COLUMNS,
 ]
 
@@ -107,6 +135,7 @@ class StrategyParams:
     min_article_count_7d: int = 0
     avoid_recent_downgrades: bool = False
     min_grade_events_90d: int = 1
+    min_historical_rating_count: int = 5
 
 
 def validate_holding_period_days(holding_period_days: int) -> None:
@@ -157,8 +186,16 @@ def strategy_analyst_data_mode(strategy_name: str) -> str:
     name = canonical_strategy_name(strategy_name)
     if name in {"historical_grades_model", "strict_historical_grades_checklist"}:
         return "historical_grade_events"
-    if name in {"historical_grades_plus_sentiment", "final_quant_model_1y_no_snapshot"}:
-        return "historical_grade_events_plus_sentiment"
+    if name == "historical_grades_plus_sentiment":
+        return "historical_grade_events"
+    if name == "historical_rating_counts_model":
+        return "historical_rating_counts"
+    if name == "historical_rating_counts_plus_sentiment":
+        return "historical_rating_counts_plus_sentiment"
+    if name == "historical_rating_counts_plus_events":
+        return "historical_rating_counts_plus_events"
+    if name in {"historical_rating_counts_plus_events_sentiment", "final_quant_model_1y_no_snapshot"}:
+        return "historical_rating_counts_plus_events_sentiment"
     if name in SNAPSHOT_ANALYST_STRATEGIES:
         return "snapshot_current"
     return "none"
@@ -170,6 +207,10 @@ def _requires_sentiment(strategy_name: str) -> bool:
 
 def _requires_historical_grades(strategy_name: str) -> bool:
     return canonical_strategy_name(strategy_name) in HISTORICAL_GRADE_STRATEGIES
+
+
+def _requires_historical_rating_counts(strategy_name: str) -> bool:
+    return canonical_strategy_name(strategy_name) in HISTORICAL_RATING_COUNT_STRATEGIES
 
 
 def _validate_sentiment_inputs(df: pd.DataFrame, strategy_name: str) -> None:
@@ -209,6 +250,24 @@ def _validate_historical_grade_inputs(df: pd.DataFrame, strategy_name: str) -> N
         )
 
 
+def _validate_historical_rating_count_inputs(df: pd.DataFrame, strategy_name: str) -> None:
+    strategy_name = canonical_strategy_name(strategy_name)
+    if not _requires_historical_rating_counts(strategy_name):
+        return
+    if df.empty:
+        return
+    missing_columns = [column for column in HISTORICAL_RATING_COUNT_COLUMNS if column not in df.columns]
+    if missing_columns:
+        raise ValueError(
+            f"Strategy '{strategy_name}' requires historical analyst rating-count features, but these columns are missing: {missing_columns}"
+        )
+    if not _safe_series(df, "historical_rating_count_data_available", False).fillna(False).any():
+        raise ValueError(
+            f"Strategy '{strategy_name}' requires historical analyst rating-count data, but no point-in-time grades-historical data is available. "
+            "Run scripts/16_fetch_fmp_historical_grades.py and scripts/04_build_features.py first."
+        )
+
+
 def _snapshot_coverage_mask(df: pd.DataFrame, threshold: int) -> pd.Series:
     analyst_count = _safe_series(df, "analyst_count", -np.inf).fillna(-np.inf)
     last_year_count = _safe_series(df, "last_year_target_count", -np.inf).fillna(-np.inf)
@@ -230,6 +289,7 @@ def get_strategy_filter_params(
     min_article_count_7d: int = 0,
     avoid_recent_downgrades: bool = False,
     min_grade_events_90d: int = 1,
+    min_historical_rating_count: int = 5,
 ) -> StrategyParams:
     return StrategyParams(
         strategy_name=canonical_strategy_name(strategy_name),
@@ -246,6 +306,7 @@ def get_strategy_filter_params(
         min_article_count_7d=min_article_count_7d,
         avoid_recent_downgrades=avoid_recent_downgrades,
         min_grade_events_90d=min_grade_events_90d,
+        min_historical_rating_count=min_historical_rating_count,
     )
 
 
@@ -257,6 +318,7 @@ def get_filter_diagnostics(
 ) -> dict[str, int]:
     _validate_sentiment_inputs(df, params.strategy_name)
     _validate_historical_grade_inputs(df, params.strategy_name)
+    _validate_historical_rating_count_inputs(df, params.strategy_name)
     future_return_column, _, _ = get_future_return_columns(holding_period_days)
     distance_col, breakout_col = _resistance_columns(params.resistance_window)
 
@@ -334,6 +396,18 @@ def get_filter_diagnostics(
             )
             diagnostics["passed_strict_historical_checklist_count"] = int(grade_mask.sum())
         diagnostics["final_pass_count"] = int(grade_mask.sum())
+    if params.strategy_name in HISTORICAL_RATING_COUNT_STRATEGIES:
+        rating_mask = liquidity_mask & _safe_series(df, "historical_rating_count_data_available", False).fillna(False)
+        diagnostics["passed_historical_rating_count_data_count"] = int(rating_mask.sum())
+        rating_mask &= _safe_series(df, "historical_total_ratings", 0).fillna(0) >= params.min_historical_rating_count
+        diagnostics["passed_min_historical_rating_count_count"] = int(rating_mask.sum())
+        if params.strategy_name in {"historical_rating_counts_plus_events", "historical_rating_counts_plus_events_sentiment"}:
+            if "historical_grade_data_available" in df.columns:
+                rating_mask &= _safe_series(df, "historical_grade_data_available", False).fillna(False)
+                diagnostics["historical_grade_event_data_present_count"] = int(rating_mask.sum())
+        if params.strategy_name == "final_quant_model_1y_no_snapshot" and params.avoid_recent_downgrades:
+            rating_mask &= ~_safe_series(df, "recent_downgrade_flag_30d", False).fillna(False)
+        diagnostics["final_pass_count"] = int(rating_mask.sum())
     elif params.strategy_name == "final_quant_model_1y_sentiment_risk_filter":
         risk_mask = analyst_mask
         risk_mask &= ~_safe_series(df, "strong_negative_news_flag", False).fillna(False)
@@ -354,6 +428,7 @@ def apply_filters(
 ) -> tuple[pd.DataFrame, dict[str, int]]:
     _validate_sentiment_inputs(df, params.strategy_name)
     _validate_historical_grade_inputs(df, params.strategy_name)
+    _validate_historical_rating_count_inputs(df, params.strategy_name)
     future_return_column, _, _ = get_future_return_columns(holding_period_days)
     distance_col, breakout_col = _resistance_columns(params.resistance_window)
 
@@ -415,10 +490,21 @@ def apply_filters(
                 mask &= ~_safe_series(df, "strong_negative_news_flag", False).fillna(False)
     elif params.strategy_name == "sentiment_only":
         mask &= _safe_series(df, "article_count_7d", 0).fillna(0) >= 1
-    elif params.strategy_name == "final_quant_model_1y_no_snapshot":
-        mask &= _safe_series(df, "historical_grade_data_available", False).fillna(False)
-        mask &= _safe_series(df, "analyst_grade_event_count_90d", 0).fillna(0) >= params.min_grade_events_90d
-        if params.avoid_recent_downgrades:
+    elif params.strategy_name in {
+        "historical_rating_counts_model",
+        "historical_rating_counts_plus_sentiment",
+        "historical_rating_counts_plus_events",
+        "historical_rating_counts_plus_events_sentiment",
+        "final_quant_model_1y_no_snapshot",
+    }:
+        mask &= _safe_series(df, "historical_rating_count_data_available", False).fillna(False)
+        mask &= _safe_series(df, "historical_total_ratings", 0).fillna(0) >= params.min_historical_rating_count
+        if params.strategy_name in {
+            "historical_rating_counts_plus_events",
+            "historical_rating_counts_plus_events_sentiment",
+        } and "historical_grade_data_available" in df.columns:
+            mask &= _safe_series(df, "historical_grade_data_available", False).fillna(False)
+        if params.strategy_name == "final_quant_model_1y_no_snapshot" and params.avoid_recent_downgrades:
             mask &= ~_safe_series(df, "recent_downgrade_flag_30d", False).fillna(False)
     elif params.strategy_name == "final_quant_model_1y_sentiment_risk_filter":
         mask &= ~_safe_series(df, "strong_negative_news_flag", False).fillna(False)
@@ -439,6 +525,7 @@ def score_rebalance_date(
     validate_score_inputs()
     _validate_sentiment_inputs(df_for_one_date, strategy_name)
     _validate_historical_grade_inputs(df_for_one_date, strategy_name)
+    _validate_historical_rating_count_inputs(df_for_one_date, strategy_name)
 
     if df_for_one_date.empty:
         return df_for_one_date.assign(score=pd.Series(dtype=float), rank=pd.Series(dtype=float))
@@ -482,6 +569,13 @@ def score_rebalance_date(
     negative_grade_ratio_30_component = _cross_sectional_zscore(_safe_series(df, "negative_grade_ratio_30d"))
     downgrade_count_30_component = _cross_sectional_zscore(_safe_series(df, "downgrade_count_30d"))
     recent_downgrade_penalty = _safe_series(df, "recent_downgrade_flag_30d", False).fillna(False).astype(float)
+    historical_rating_score_component = _cross_sectional_zscore(_safe_series(df, "historical_rating_score"))
+    historical_positive_ratio_component = _cross_sectional_zscore(_safe_series(df, "historical_positive_rating_ratio"))
+    historical_negative_ratio_component = _cross_sectional_zscore(_safe_series(df, "historical_negative_rating_ratio"))
+    historical_rating_score_change_30_component = _cross_sectional_zscore(_safe_series(df, "historical_rating_score_change_30d"))
+    historical_negative_ratio_change_30_component = _cross_sectional_zscore(
+        _safe_series(df, "historical_negative_ratio_change_30d")
+    )
 
     if strategy_name == "technical_only":
         df["score"] = (
@@ -604,6 +698,62 @@ def score_rebalance_date(
             + 0.10 * sentiment_change_component
             - 0.10 * negative_news_ratio_component
         )
+    elif strategy_name == "historical_rating_counts_model":
+        df["score"] = (
+            0.35 * historical_rating_score_component
+            + 0.20 * historical_positive_ratio_component
+            - 0.20 * historical_negative_ratio_component
+            + 0.15 * historical_rating_score_change_30_component
+            - 0.10 * historical_negative_ratio_change_30_component
+            + 0.10 * relative_strength_21_component
+            + 0.10 * relative_strength_63_component
+        )
+    elif strategy_name == "historical_rating_counts_plus_sentiment":
+        base = (
+            0.35 * historical_rating_score_component
+            + 0.20 * historical_positive_ratio_component
+            - 0.20 * historical_negative_ratio_component
+            + 0.15 * historical_rating_score_change_30_component
+            - 0.10 * historical_negative_ratio_change_30_component
+            + 0.10 * relative_strength_21_component
+            + 0.10 * relative_strength_63_component
+        )
+        df["score"] = (
+            base
+            + 0.15 * relevance_weighted_sentiment_component
+            + 0.10 * sentiment_change_component
+            - 0.10 * negative_news_ratio_component
+        )
+    elif strategy_name == "historical_rating_counts_plus_events":
+        base = (
+            0.35 * historical_rating_score_component
+            + 0.20 * historical_positive_ratio_component
+            - 0.20 * historical_negative_ratio_component
+            + 0.15 * historical_rating_score_change_30_component
+            - 0.10 * historical_negative_ratio_change_30_component
+            + 0.10 * relative_strength_21_component
+            + 0.10 * relative_strength_63_component
+        )
+        df["score"] = base + 0.10 * net_upgrade_30_component - 0.10 * downgrade_count_30_component - 0.10 * recent_downgrade_penalty
+    elif strategy_name == "historical_rating_counts_plus_events_sentiment":
+        base = (
+            0.35 * historical_rating_score_component
+            + 0.20 * historical_positive_ratio_component
+            - 0.20 * historical_negative_ratio_component
+            + 0.15 * historical_rating_score_change_30_component
+            - 0.10 * historical_negative_ratio_change_30_component
+            + 0.10 * relative_strength_21_component
+            + 0.10 * relative_strength_63_component
+        )
+        df["score"] = (
+            base
+            + 0.10 * net_upgrade_30_component
+            - 0.10 * downgrade_count_30_component
+            - 0.10 * recent_downgrade_penalty
+            + 0.15 * relevance_weighted_sentiment_component
+            + 0.10 * sentiment_change_component
+            - 0.10 * negative_news_ratio_component
+        )
     elif strategy_name == "strict_historical_grades_checklist":
         df["score"] = (
             0.35 * net_upgrade_30_component
@@ -650,26 +800,22 @@ def score_rebalance_date(
             )
         df["score"] = score
     elif strategy_name == "final_quant_model_1y_no_snapshot":
-        df["score"] = (
-            0.16 * relative_strength_21_component
-            + 0.14 * relative_strength_63_component
-            + 0.10 * distance_63_component
-            + 0.08 * above_sma_50_component
-            + 0.04 * above_sma_200_component
+        score = (
+            0.20 * historical_rating_score_component
+            + 0.15 * historical_positive_ratio_component
+            - 0.15 * historical_negative_ratio_component
+            + 0.10 * historical_rating_score_change_30_component
+            - 0.10 * historical_negative_ratio_change_30_component
+            + 0.15 * relative_strength_21_component
+            + 0.10 * relative_strength_63_component
             + 0.10 * relevance_weighted_sentiment_component
-            + 0.08 * relevance_weighted_sentiment_30_component
-            + 0.08 * sentiment_change_component
-            - 0.06 * negative_news_ratio_component
-            - 0.06 * strong_negative_news_penalty
+            + 0.05 * sentiment_change_component
             - 0.05 * volatility_component
-            - 0.04 * beta_component
             + 0.10 * breakout_63_component
-            + 0.10 * net_upgrade_30_component
-            - 0.08 * downgrade_count_30_component
-            - 0.06 * recent_downgrade_penalty
-            + 0.08 * positive_grade_ratio_30_component
-            - 0.05 * negative_grade_ratio_30_component
         )
+        if "historical_grade_data_available" in df.columns and _safe_series(df, "historical_grade_data_available", False).fillna(False).any():
+            score = score + 0.05 * net_upgrade_30_component - 0.05 * downgrade_count_30_component
+        df["score"] = score
     elif strategy_name == "final_quant_model_1y_no_sentiment":
         score = (
             0.24 * consensus_component

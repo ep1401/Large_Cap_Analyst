@@ -199,6 +199,11 @@ def _append_holding_rows(
         "negative_news_ratio_7d",
         "article_count_7d",
         "strong_negative_news_flag",
+        "historical_rating_score",
+        "historical_positive_rating_ratio",
+        "historical_negative_rating_ratio",
+        "historical_total_ratings",
+        "historical_rating_count_data_available",
         "net_upgrade_score_30d",
         "downgrade_count_30d",
         "positive_grade_ratio_30d",
@@ -235,6 +240,7 @@ def run_weekly_backtest(
     min_article_count_7d: int = 0,
     avoid_recent_downgrades: bool = False,
     min_grade_events_90d: int = 1,
+    min_historical_rating_count: int = 5,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Run a non-overlapping cross-sectional backtest with turnover costs and diagnostics."""
     validate_holding_period_days(holding_period_days)
@@ -270,6 +276,7 @@ def run_weekly_backtest(
         min_article_count_7d=min_article_count_7d,
         avoid_recent_downgrades=avoid_recent_downgrades,
         min_grade_events_90d=min_grade_events_90d,
+        min_historical_rating_count=min_historical_rating_count,
     )
 
     weekly_rows: list[dict] = []

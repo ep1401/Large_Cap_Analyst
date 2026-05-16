@@ -48,7 +48,7 @@ def main() -> None:
     features = load_dataframe(config.final_dir / "features_panel.csv", parse_dates=["date"])
     analyst_data_is_point_in_time = not (
         "analyst_data_mode" in features.columns
-        and features["analyst_data_mode"].fillna("").eq("research_current_snapshot").any()
+        and features["analyst_data_mode"].fillna("").eq("snapshot_current").any()
     )
 
     strategy_names = [

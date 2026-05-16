@@ -37,7 +37,7 @@ def main() -> None:
     )
     print(
         "Warning: analyst_features.csv is stored as a current research snapshot unless your FMP plan provides"
-        " point-in-time history. Use historical_backtest_without_analyst for valid historical backtests."
+        " point-in-time history. These snapshot fields are exploratory and should not be treated as historically valid analyst signals."
     )
     print(f"Saved analyst snapshot rows: {len(df)}")
 

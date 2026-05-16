@@ -61,6 +61,7 @@ stock_quant_backtester/
 ```bash
 python scripts/01_fetch_prices.py
 python scripts/02_fetch_analyst_data.py
+python scripts/16_fetch_fmp_historical_grades.py
 python scripts/00_cache_status.py
 python scripts/12_fetch_alpha_vantage_news.py --dry-run
 python scripts/12_fetch_alpha_vantage_news.py
@@ -69,9 +70,8 @@ python scripts/04_build_features.py
 python scripts/05_run_backtest.py
 python scripts/14_compare_sentiment_models.py
 python scripts/15_run_fast_sentiment_backtest.py
-python scripts/16_fetch_fmp_historical_grades.py
 python scripts/17_compare_historical_analyst_models.py
-python scripts/18_validate_historical_grades.py
+python scripts/18_validate_historical_ratings.py
 python scripts/20_run_final_quant_model_1y.py
 python scripts/99_clean_outputs.py --list
 python scripts/07_grid_search.py
@@ -96,12 +96,12 @@ Warning: Analyst data may not be point-in-time unless historical target summary 
 
 Supported modes:
 
-- `research_current_snapshot`
-- `historical_backtest_without_analyst`
+- `snapshot_current`
+- `none`
 
 ### `scripts/04_build_features.py`
 
-Builds `data/final/features_panel.csv` with technical, analyst snapshot, optional sentiment, optional historical analyst-grade, regime, liquidity, and forward-return evaluation columns. It also writes `data/final/features_panel_sentiment_1y.csv` for the default fast sentiment window.
+Builds `data/final/features_panel.csv` with technical features, snapshot analyst target fields, optional sentiment, point-in-time `grades-historical` rating-count features, optional point-in-time grade-event rolling features, regime columns, liquidity columns, and forward-return evaluation columns. It also writes `data/final/features_panel_sentiment_1y.csv` for the default fast sentiment window.
 
 ### `scripts/00_cache_status.py`
 
@@ -143,19 +143,22 @@ Runs the quick 1-year sentiment workflow end to end:
 
 ### `scripts/16_fetch_fmp_historical_grades.py`
 
-Fetches FMP historical analyst grade data, caches raw payloads under `data/raw/analyst/fmp_historical_grades/`, and writes normalized point-in-time grade events to `data/processed/historical_analyst_grades.csv`.
+Fetches both FMP historical analyst datasets, caches raw payloads under `data/raw/analyst/fmp_historical_grades/`, and writes:
+
+- `data/processed/historical_analyst_rating_counts.csv` from `grades-historical`
+- `data/processed/historical_analyst_grade_events.csv` from `grades`
 
 ### `scripts/17_compare_historical_analyst_models.py`
 
-Compares technical, snapshot-analyst, and historical-grade strategies. Writes:
+Compares technical, snapshot-analyst, historical grade-event, and historical rating-count strategies. Writes:
 
 - `outputs/tables/historical_analyst_model_comparison.csv`
-- `outputs/tables/historical_grade_diagnostics.csv`
+- `outputs/tables/historical_rating_count_diagnostics.csv`
 - `outputs/reports/historical_analyst_model_comparison.md`
 
-### `scripts/18_validate_historical_grades.py`
+### `scripts/18_validate_historical_ratings.py`
 
-Samples ticker/date rows from the feature panel and confirms the historical analyst-grade features only use FMP grade events with `event_date <= feature_date`.
+Samples ticker/date rows from the feature panel and confirms the `grades-historical` merge only uses records with `rating_date <= feature_date`, validates safe missing-data fills, and checks analyst data-mode labeling.
 
 ### `scripts/20_run_final_quant_model_1y.py`
 
@@ -291,7 +294,32 @@ The default implementation spaces requests to stay under those ceilings during s
 
 Snapshot analyst target data is not point-in-time and remains exploratory in this project.
 
-If your FMP plan exposes dated grade events, the project can fetch historical FMP analyst grade records and build point-in-time historical analyst features from them. These features only use grade events available on or before each rebalance date, which makes them better suited for historical analyst claims than current snapshot price-target consensus.
+### Using FMP grades-historical for Historical Analyst Ratings
+
+- `grades-historical` gives dated historical rating-count snapshots.
+- `grades` gives individual analyst action events.
+- `price-target-summary` and `price-target-consensus` are snapshot-style unless point-in-time target history is available.
+- Historically valid analyst models should prefer `grades-historical` and dated grade events.
+- Snapshot target-upside models remain exploratory.
+
+Historically valid analyst signals:
+
+- `grades-historical` rating-count snapshots
+- dated grade action events from `grades`
+
+Exploratory analyst signals:
+
+- `price-target-consensus`
+- `price-target-summary`
+- `consensus_upside`
+- `low_target_upside`
+- `last_month_target_upside`
+- `last_quarter_target_upside`
+- `last_year_target_upside`
+
+Historical rating-count features are built from dated FMP grades-historical records and use only the latest record available on or before each rebalance date.
+
+If your FMP plan exposes dated grade events, the project can also build rolling historical grade-event features from them. These event features only use grade actions available on or before each rebalance date, which makes them better suited for historical analyst claims than current snapshot price-target consensus.
 
 Historical grade features are not the same thing as true historical price-target consensus. They capture dated analyst rating actions such as upgrades, downgrades, and maintained ratings. If the FMP historical grade endpoint is blocked by your plan or unavailable for a ticker, the historical-grade strategies are skipped with a clear message.
 

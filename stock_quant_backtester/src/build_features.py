@@ -6,6 +6,10 @@ import numpy as np
 import pandas as pd
 
 from src.build_historical_grade_features import HISTORICAL_GRADE_FEATURE_COLUMNS, build_historical_grade_features
+from src.build_historical_rating_count_features import (
+    HISTORICAL_RATING_COUNT_FEATURE_COLUMNS,
+    build_historical_rating_count_features,
+)
 from src.utils import LOGGER, load_dataframe, save_dataframe
 
 
@@ -84,11 +88,11 @@ def _merge_analyst_snapshot(
     if use_current_snapshot:
         snapshot = analyst_df.sort_values("date").groupby("ticker").tail(1)
         merged = features.merge(snapshot[["ticker", *analyst_columns]], on="ticker", how="left")
-        merged["analyst_data_mode"] = "research_current_snapshot"
+        merged["analyst_data_mode"] = "snapshot_current"
         return merged
 
     merged = features.merge(analyst_df[["date", "ticker", *analyst_columns]], on=["date", "ticker"], how="left")
-    merged["analyst_data_mode"] = "historical_backtest_without_analyst"
+    merged["analyst_data_mode"] = "none"
     return merged
 
 
@@ -220,13 +224,41 @@ def _merge_sentiment(features: pd.DataFrame, sentiment_df: pd.DataFrame | None) 
     return merged
 
 
-def _merge_historical_grade_features(
+def _merge_historical_rating_count_features(
     features: pd.DataFrame,
-    historical_grades_path: str | Path | None,
+    historical_rating_counts_path: str | Path | None,
     processed_output_path: str | Path | None,
 ) -> pd.DataFrame:
-    if not historical_grades_path or not Path(historical_grades_path).exists():
-        LOGGER.warning("No historical analyst grade file found; building features without historical grade features.")
+    if not historical_rating_counts_path or not Path(historical_rating_counts_path).exists():
+        LOGGER.warning("No historical analyst rating counts found; skipping rating-count features.")
+        for column in HISTORICAL_RATING_COUNT_FEATURE_COLUMNS:
+            if column in {"historical_rating_count_data_available", "historical_negative_rating_increase_30d", "historical_positive_rating_increase_30d"}:
+                features[column] = False
+            elif column == "historical_rating_record_date":
+                features[column] = pd.NaT
+            elif column == "days_since_historical_rating_update":
+                features[column] = np.nan
+            elif column == "historical_rating_score":
+                features[column] = 3.0
+            else:
+                features[column] = 0.0
+        return features
+
+    historical_features = build_historical_rating_count_features(
+        historical_rating_counts_path,
+        features[["date", "ticker"]].copy(),
+        processed_output_path,
+    )
+    return features.merge(historical_features, on=["date", "ticker"], how="left")
+
+
+def _merge_historical_grade_features(
+    features: pd.DataFrame,
+    historical_grade_events_path: str | Path | None,
+    processed_output_path: str | Path | None,
+) -> pd.DataFrame:
+    if not historical_grade_events_path or not Path(historical_grade_events_path).exists():
+        LOGGER.warning("No historical analyst grade events found; skipping grade-event features.")
         for column in HISTORICAL_GRADE_FEATURE_COLUMNS:
             if column.startswith("recent_") or column == "historical_grade_data_available":
                 features[column] = False
@@ -239,7 +271,7 @@ def _merge_historical_grade_features(
         return features
 
     historical_features = build_historical_grade_features(
-        historical_grades_path,
+        historical_grade_events_path,
         features[["date", "ticker"]].copy(),
         processed_output_path,
     )
@@ -252,7 +284,9 @@ def build_feature_panel(
     output_path: str | Path,
     analyst_path: str | Path | None = None,
     sentiment_path: str | Path | None = None,
-    historical_grades_path: str | Path | None = None,
+    historical_rating_counts_path: str | Path | None = None,
+    historical_grade_events_path: str | Path | None = None,
+    historical_rating_count_features_output_path: str | Path | None = None,
     historical_grade_features_output_path: str | Path | None = None,
     benchmark_ticker: str = "SPY",
     use_current_snapshot_analyst: bool = False,
@@ -365,7 +399,12 @@ def build_feature_panel(
 
     features = _merge_sentiment(features, sentiment_df)
     features = _merge_analyst_snapshot(features, analyst_df, use_current_snapshot_analyst)
-    features = _merge_historical_grade_features(features, historical_grades_path, historical_grade_features_output_path)
+    features = _merge_historical_rating_count_features(
+        features,
+        historical_rating_counts_path,
+        historical_rating_count_features_output_path,
+    )
+    features = _merge_historical_grade_features(features, historical_grade_events_path, historical_grade_features_output_path)
     features = features.merge(universe[["ticker", "sector"]], on="ticker", how="left")
 
     final_columns = [
@@ -449,6 +488,7 @@ def build_feature_panel(
         "target_spread",
         "target_revision_7d",
         "target_revision_30d",
+        *HISTORICAL_RATING_COUNT_FEATURE_COLUMNS,
         *HISTORICAL_GRADE_FEATURE_COLUMNS,
         "spy_close",
         "spy_sma_50",

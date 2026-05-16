@@ -107,7 +107,7 @@ def main() -> None:
     use_analyst_filters = str_to_bool(args.use_analyst_filters, default=True)
     use_regime_filter = str_to_bool(args.use_regime_filter, default=False)
     analyst_data_is_point_in_time = not (
-        "analyst_data_mode" in features.columns and features["analyst_data_mode"].fillna("").eq("research_current_snapshot").any()
+        "analyst_data_mode" in features.columns and features["analyst_data_mode"].fillna("").eq("snapshot_current").any()
     )
     window_label = f"{features['date'].min().date()}_{features['date'].max().date()}"
 

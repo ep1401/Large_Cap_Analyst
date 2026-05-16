@@ -15,13 +15,14 @@ from src.scoring import strategy_analyst_data_mode
 from src.utils import load_dataframe, save_dataframe
 
 
-IMPORTANT_CAVEAT = (
-    "Important caveat: analyst-driven snapshot results use FMP data as a current snapshot merged "
-    "across historical dates unless true point-in-time analyst history is provided. These results "
-    "should be treated as research exploration, not a valid historical analyst-signal backtest."
+IMPORTANT_SNAPSHOT_CAVEAT = (
+    "Important caveat: analyst-driven snapshot results use FMP data as a current snapshot merged across historical dates unless true point-in-time analyst target history is provided. These results should be treated as research exploration, not a valid historical analyst-signal backtest."
 )
-HISTORICAL_GRADE_NOTE = (
-    "Historical grade features are built from dated FMP grade events and use only events available on or before each rebalance date."
+HISTORICAL_RATING_NOTE = (
+    "Historical rating-count features are built from dated FMP grades-historical records and use only the latest record available on or before each rebalance date."
+)
+HISTORICAL_EVENT_NOTE = (
+    "Historically valid analyst signals also include dated grade action events from the FMP grades endpoint, using only events available on or before each rebalance date."
 )
 DEV_END = pd.Timestamp("2024-12-31")
 TEST_START = pd.Timestamp("2025-01-01")
@@ -58,8 +59,7 @@ def _metrics_row(
     *,
     holding_period_days: int,
     top_n: int,
-    avoid_recent_downgrades: bool,
-    min_grade_events_90d: int,
+    min_historical_rating_count: int,
     use_regime_filter: bool,
     max_names_per_sector: int | None,
 ) -> dict:
@@ -71,8 +71,7 @@ def _metrics_row(
         "analyst_data_mode": strategy_analyst_data_mode(strategy_name),
         "holding_period_days": holding_period_days,
         "top_n": top_n,
-        "avoid_recent_downgrades": avoid_recent_downgrades,
-        "min_grade_events_90d": min_grade_events_90d,
+        "min_historical_rating_count": min_historical_rating_count,
         "use_regime_filter": use_regime_filter,
         "max_names_per_sector": max_names_per_sector,
         "full_period_total_return": full["total_return"],
@@ -102,35 +101,80 @@ def _dataframe_to_markdown(df: pd.DataFrame) -> str:
     return "\n".join([header_line, separator, *body])
 
 
-def _build_diagnostics(features: pd.DataFrame, selected_holdings: pd.DataFrame, benchmark: str) -> pd.DataFrame:
+def _build_spy_weekly(features: pd.DataFrame, config: Config, holding_period_days: int) -> pd.DataFrame:
+    future_spy_map = {5: "future_5d_spy_return", 21: "future_21d_spy_return", 63: "future_63d_spy_return"}
+    portfolio_value = config.initial_capital
+    rows: list[dict] = []
+    for date in select_rebalance_dates(features, holding_period_days=holding_period_days, benchmark=config.benchmark):
+        spy_return = float(
+            features.loc[
+                (features["ticker"] == config.benchmark) & (features["date"] == date),
+                future_spy_map[holding_period_days],
+            ].iloc[0]
+        )
+        portfolio_value *= 1 + spy_return
+        rows.append(
+            {
+                "date": pd.to_datetime(date),
+                "strategy_name": "SPY",
+                "selected_count": 1,
+                "qualified_count": 1,
+                "gross_return": spy_return,
+                "turnover": 0.0,
+                "transaction_cost": 0.0,
+                "net_return": spy_return,
+                "spy_return": spy_return,
+                "excess_return": 0.0,
+                "portfolio_value": portfolio_value,
+                "spy_value": portfolio_value,
+                "exposure": 1.0,
+                "regime_allowed": True,
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def _build_rating_count_diagnostics(
+    features: pd.DataFrame,
+    selected_holdings: pd.DataFrame,
+    benchmark: str,
+) -> pd.DataFrame:
     selected_daily = (
         selected_holdings.groupby("date")
         .agg(
-            selected_avg_net_upgrade_score_30d=("net_upgrade_score_30d", "mean"),
-            selected_downgrade_count_30d=("downgrade_count_30d", "mean"),
+            selected_avg_historical_rating_score=("historical_rating_score", "mean"),
+            selected_avg_historical_positive_rating_ratio=("historical_positive_rating_ratio", "mean"),
+            selected_avg_historical_negative_rating_ratio=("historical_negative_rating_ratio", "mean"),
         )
         .reset_index()
-    )
+    ) if not selected_holdings.empty else pd.DataFrame(columns=["date"])
 
-    rows = []
+    rows: list[dict] = []
     for date, day in features.loc[features["ticker"] != benchmark].groupby("date"):
+        day = day.copy()
         rows.append(
             {
                 "date": pd.to_datetime(date),
                 "total_candidates": len(day),
-                "candidates_with_historical_grade_data": int(day["historical_grade_data_available"].fillna(False).sum()),
-                "candidates_with_grade_event_90d": int((day["analyst_grade_event_count_90d"] > 0).sum()),
-                "candidates_with_upgrade_30d": int((day["upgrade_count_30d"] > 0).sum()),
-                "candidates_with_downgrade_30d": int((day["downgrade_count_30d"] > 0).sum()),
-                "candidates_with_recent_downgrade_flag_30d": int(day["recent_downgrade_flag_30d"].fillna(False).sum()),
-                "avg_net_upgrade_score_30d": float(day["net_upgrade_score_30d"].mean()),
-                "avg_positive_grade_ratio_30d": float(day["positive_grade_ratio_30d"].mean()),
+                "candidates_with_historical_rating_counts": int(day["historical_rating_count_data_available"].fillna(False).sum()),
+                "candidates_with_total_ratings_ge_1": int((day["historical_total_ratings"].fillna(0) >= 1).sum()),
+                "candidates_with_total_ratings_ge_5": int((day["historical_total_ratings"].fillna(0) >= 5).sum()),
+                "candidates_with_total_ratings_ge_10": int((day["historical_total_ratings"].fillna(0) >= 10).sum()),
+                "avg_historical_rating_score": float(day["historical_rating_score"].mean()),
+                "avg_historical_positive_rating_ratio": float(day["historical_positive_rating_ratio"].mean()),
+                "avg_historical_negative_rating_ratio": float(day["historical_negative_rating_ratio"].mean()),
+                "avg_days_since_historical_rating_update": float(day["days_since_historical_rating_update"].mean()),
             }
         )
 
     diagnostics = pd.DataFrame(rows).merge(selected_daily, on="date", how="left")
-    diagnostics["selected_avg_net_upgrade_score_30d"] = diagnostics["selected_avg_net_upgrade_score_30d"].fillna(0.0)
-    diagnostics["selected_downgrade_count_30d"] = diagnostics["selected_downgrade_count_30d"].fillna(0.0)
+    diagnostics["selected_avg_historical_rating_score"] = diagnostics["selected_avg_historical_rating_score"].fillna(0.0)
+    diagnostics["selected_avg_historical_positive_rating_ratio"] = diagnostics[
+        "selected_avg_historical_positive_rating_ratio"
+    ].fillna(0.0)
+    diagnostics["selected_avg_historical_negative_rating_ratio"] = diagnostics[
+        "selected_avg_historical_negative_rating_ratio"
+    ].fillna(0.0)
     return diagnostics.sort_values("date").reset_index(drop=True)
 
 
@@ -142,144 +186,141 @@ def main() -> None:
     config = Config.from_env()
     features_path = Path(args.features_path) if args.features_path else config.final_dir / "features_panel.csv"
     features = load_dataframe(features_path, parse_dates=["date"])
-    grades_path = config.processed_dir / "historical_analyst_grades.csv"
-    grades_df = load_dataframe(grades_path, parse_dates=["date"]) if grades_path.exists() else pd.DataFrame()
 
-    has_historical_grade_data = (
-        "historical_grade_data_available" in features.columns
-        and features["historical_grade_data_available"].fillna(False).any()
-    )
     has_sentiment = (
         "relevance_weighted_sentiment_7d" in features.columns
         and "negative_news_ratio_7d" in features.columns
         and not features["sentiment_data_mode"].fillna("").eq("missing_news_sentiment").all()
+    )
+    has_rating_counts = (
+        "historical_rating_count_data_available" in features.columns
+        and features["historical_rating_count_data_available"].fillna(False).any()
+    )
+    has_grade_events = (
+        "historical_grade_data_available" in features.columns
+        and features["historical_grade_data_available"].fillna(False).any()
     )
 
     strategy_specs = [
         {"strategy_name": "technical_only", "use_analyst_filters": False},
         {"strategy_name": "technical_momentum_model", "use_analyst_filters": False},
         {"strategy_name": "analyst_snapshot_model", "use_analyst_filters": True},
-        {"strategy_name": "full_model", "use_analyst_filters": True},
+        {"strategy_name": "final_quant_model_1y", "use_analyst_filters": True},
     ]
     skipped_models: list[str] = []
-    if has_historical_grade_data:
-        strategy_specs.extend(
-            [
-                {"strategy_name": "historical_grades_model", "use_analyst_filters": False},
-                {"strategy_name": "strict_historical_grades_checklist", "use_analyst_filters": False},
-            ]
-        )
+
+    if has_grade_events:
+        strategy_specs.append({"strategy_name": "historical_grades_model", "use_analyst_filters": False})
+    else:
+        skipped_models.append("historical_grades_model (missing historical grade-event data)")
+
+    if has_rating_counts:
+        strategy_specs.append({"strategy_name": "historical_rating_counts_model", "use_analyst_filters": False})
         if has_sentiment:
-            strategy_specs.append({"strategy_name": "historical_grades_plus_sentiment", "use_analyst_filters": False})
+            strategy_specs.append({"strategy_name": "historical_rating_counts_plus_sentiment", "use_analyst_filters": False})
         else:
-            skipped_models.append("historical_grades_plus_sentiment (missing sentiment features)")
+            skipped_models.append("historical_rating_counts_plus_sentiment (missing sentiment features)")
+
+        if has_grade_events:
+            strategy_specs.append({"strategy_name": "historical_rating_counts_plus_events", "use_analyst_filters": False})
+            if has_sentiment:
+                strategy_specs.append(
+                    {"strategy_name": "historical_rating_counts_plus_events_sentiment", "use_analyst_filters": False}
+                )
+            else:
+                skipped_models.append("historical_rating_counts_plus_events_sentiment (missing sentiment features)")
+        else:
+            skipped_models.extend(
+                [
+                    "historical_rating_counts_plus_events (missing historical grade-event data)",
+                    "historical_rating_counts_plus_events_sentiment (missing historical grade-event data)",
+                ]
+            )
+
+        if has_sentiment:
+            strategy_specs.append({"strategy_name": "final_quant_model_1y_no_snapshot", "use_analyst_filters": False})
+        else:
+            skipped_models.append("final_quant_model_1y_no_snapshot (missing sentiment features)")
     else:
         skipped_models.extend(
             [
-                "historical_grades_model (missing historical grade data)",
-                "historical_grades_plus_sentiment (missing historical grade data)",
-                "strict_historical_grades_checklist (missing historical grade data)",
+                "historical_rating_counts_model (missing historical rating-count data)",
+                "historical_rating_counts_plus_sentiment (missing historical rating-count data)",
+                "historical_rating_counts_plus_events (missing historical rating-count data)",
+                "historical_rating_counts_plus_events_sentiment (missing historical rating-count data)",
+                "final_quant_model_1y_no_snapshot (missing historical rating-count data)",
             ]
         )
 
     comparison_rows: list[dict] = []
     selected_for_diagnostics = pd.DataFrame()
+
+    sector_limits = [None, 3] if "sector" in features.columns and features["sector"].notna().any() else [None]
+    baseline_diagnostic_key = ("historical_rating_counts_model", 21, 10, 5, False, None)
+
     for holding_period_days in [5, 21, 63]:
-        future_col = {5: "future_5d_spy_return", 21: "future_21d_spy_return", 63: "future_63d_spy_return"}[holding_period_days]
-        portfolio_value = config.initial_capital
-        spy_records = []
-        rebalance_dates = select_rebalance_dates(features, holding_period_days=holding_period_days, benchmark=config.benchmark)
-        for date in rebalance_dates:
-            spy_return = float(
-                features.loc[(features["ticker"] == config.benchmark) & (features["date"] == date), future_col].iloc[0]
-            )
-            portfolio_value *= 1 + spy_return
-            spy_records.append(
-                {
-                    "date": pd.to_datetime(date),
-                    "strategy_name": "SPY",
-                    "selected_count": 1,
-                    "qualified_count": 1,
-                    "gross_return": spy_return,
-                    "turnover": 0.0,
-                    "transaction_cost": 0.0,
-                    "net_return": spy_return,
-                    "spy_return": spy_return,
-                    "excess_return": 0.0,
-                    "portfolio_value": portfolio_value,
-                    "spy_value": portfolio_value,
-                    "exposure": 1.0,
-                    "regime_allowed": True,
-                }
-            )
-        spy_weekly = pd.DataFrame(spy_records)
+        spy_weekly = _build_spy_weekly(features, config, holding_period_days)
         comparison_rows.append(
             _metrics_row(
                 "SPY",
                 spy_weekly,
                 holding_period_days=holding_period_days,
                 top_n=1,
-                avoid_recent_downgrades=False,
-                min_grade_events_90d=0,
+                min_historical_rating_count=0,
                 use_regime_filter=False,
                 max_names_per_sector=None,
             )
         )
 
-        sector_limits = [None, 3] if features.get("sector") is not None and features["sector"].notna().any() else [None]
         for top_n in [10, 20]:
-            for use_regime_filter in [False, True]:
-                for max_names_per_sector in sector_limits:
-                    for spec in strategy_specs:
-                        strategy_name = spec["strategy_name"]
-                        grade_grid = (
-                            [
-                                (avoid_recent_downgrades, min_grade_events_90d)
-                                for avoid_recent_downgrades in [False, True]
-                                for min_grade_events_90d in [1, 2, 3]
-                            ]
-                            if strategy_name in {"historical_grades_model", "historical_grades_plus_sentiment", "strict_historical_grades_checklist"}
-                            else [(False, 1)]
-                        )
-                        for avoid_recent_downgrades, min_grade_events_90d in grade_grid:
-                            weekly, holdings, _ = run_weekly_backtest(
-                                features=features,
-                                holding_period_days=holding_period_days,
-                                benchmark=config.benchmark,
-                                top_n=top_n,
-                                initial_capital=config.initial_capital,
-                                transaction_cost_bps=config.transaction_cost_bps,
-                                use_regime_filter=use_regime_filter,
-                                regime_exposure=0.0,
-                                use_analyst_filters=spec["use_analyst_filters"],
-                                analyst_count_threshold=10,
-                                min_avg_dollar_volume=20_000_000,
-                                strategy_name=strategy_name,
-                                avoid_recent_downgrades=avoid_recent_downgrades,
-                                min_grade_events_90d=min_grade_events_90d,
-                                max_names_per_sector=max_names_per_sector,
-                            )
+            for min_historical_rating_count in [1, 5, 10]:
+                for use_regime_filter in [False, True]:
+                    for max_names_per_sector in sector_limits:
+                        for spec in strategy_specs:
+                            strategy_name = spec["strategy_name"]
+                            try:
+                                weekly, holdings, _ = run_weekly_backtest(
+                                    features=features,
+                                    holding_period_days=holding_period_days,
+                                    benchmark=config.benchmark,
+                                    top_n=top_n,
+                                    initial_capital=config.initial_capital,
+                                    transaction_cost_bps=config.transaction_cost_bps,
+                                    use_regime_filter=use_regime_filter,
+                                    regime_exposure=0.0,
+                                    use_analyst_filters=spec["use_analyst_filters"],
+                                    analyst_count_threshold=config.analyst_count_threshold,
+                                    min_avg_dollar_volume=config.min_avg_dollar_volume,
+                                    strategy_name=strategy_name,
+                                    max_names_per_sector=max_names_per_sector,
+                                    min_grade_events_90d=1,
+                                    min_historical_rating_count=min_historical_rating_count,
+                                )
+                            except ValueError as exc:
+                                skipped_models.append(f"{strategy_name} ({exc})")
+                                continue
+
                             comparison_rows.append(
                                 _metrics_row(
                                     strategy_name,
                                     weekly,
                                     holding_period_days=holding_period_days,
                                     top_n=top_n,
-                                    avoid_recent_downgrades=avoid_recent_downgrades,
-                                    min_grade_events_90d=min_grade_events_90d,
+                                    min_historical_rating_count=min_historical_rating_count,
                                     use_regime_filter=use_regime_filter,
                                     max_names_per_sector=max_names_per_sector,
                                 )
                             )
-                            if (
-                                strategy_name == "historical_grades_model"
-                                and holding_period_days == 21
-                                and top_n == 10
-                                and not avoid_recent_downgrades
-                                and min_grade_events_90d == 1
-                                and not use_regime_filter
-                                and max_names_per_sector is None
-                            ):
+
+                            current_key = (
+                                strategy_name,
+                                holding_period_days,
+                                top_n,
+                                min_historical_rating_count,
+                                use_regime_filter,
+                                max_names_per_sector,
+                            )
+                            if current_key == baseline_diagnostic_key:
                                 selected_for_diagnostics = holdings.copy()
 
     comparison_df = pd.DataFrame(comparison_rows).sort_values(
@@ -288,69 +329,73 @@ def main() -> None:
     ).reset_index(drop=True)
     save_dataframe(config.tables_dir / "historical_analyst_model_comparison.csv", comparison_df)
 
-    diagnostics_df = _build_diagnostics(features, selected_for_diagnostics, config.benchmark)
-    save_dataframe(config.tables_dir / "historical_grade_diagnostics.csv", diagnostics_df)
+    diagnostics_df = _build_rating_count_diagnostics(features, selected_for_diagnostics, config.benchmark)
+    save_dataframe(config.tables_dir / "historical_rating_count_diagnostics.csv", diagnostics_df)
 
-    latest_by_strategy = {
+    best_by_strategy = {
         row["strategy_name"]: row for _, row in comparison_df.groupby("strategy_name", as_index=False).head(1).iterrows()
     }
-    historical_best = comparison_df.loc[
+    historical_rating_subset = comparison_df.loc[
         comparison_df["strategy_name"].isin(
-            ["historical_grades_model", "historical_grades_plus_sentiment", "strict_historical_grades_checklist"]
+            [
+                "historical_rating_counts_model",
+                "historical_rating_counts_plus_sentiment",
+                "historical_rating_counts_plus_events",
+                "historical_rating_counts_plus_events_sentiment",
+            ]
         )
-    ].head(10)
-    technical_best = latest_by_strategy.get("technical_only")
-    spy_best = latest_by_strategy.get("SPY")
-    snapshot_best = latest_by_strategy.get("analyst_snapshot_model")
-    historical_best_row = historical_best.iloc[0] if not historical_best.empty else None
+    ]
+    historical_best = historical_rating_subset.iloc[0] if not historical_rating_subset.empty else None
+    snapshot_best = best_by_strategy.get("analyst_snapshot_model")
+    technical_best = best_by_strategy.get("technical_only")
 
-    coverage_pct_any = float(features.loc[features["ticker"] != config.benchmark, "historical_grade_data_available"].fillna(False).mean())
-    coverage_pct_90d = float(
-        (features.loc[features["ticker"] != config.benchmark, "analyst_grade_event_count_90d"].fillna(0) > 0).mean()
-    )
-    average_events_per_ticker = float(grades_df.groupby("ticker").size().mean()) if not grades_df.empty else 0.0
-    common_actions = grades_df["action"].fillna("unknown").value_counts().head(5).to_dict() if not grades_df.empty else {}
-    no_coverage_tickers = sorted(set(features["ticker"].unique()) - {config.benchmark} - set(grades_df["ticker"].unique())) if not grades_df.empty else []
+    candidate_rows = features.loc[features["ticker"] != config.benchmark].copy()
+    coverage_pct_any = float(candidate_rows["historical_rating_count_data_available"].fillna(False).mean()) if has_rating_counts else 0.0
+    coverage_pct_ge_5 = float((candidate_rows["historical_total_ratings"].fillna(0) >= 5).mean()) if has_rating_counts else 0.0
+    coverage_pct_ge_10 = float((candidate_rows["historical_total_ratings"].fillna(0) >= 10).mean()) if has_rating_counts else 0.0
+    avg_days_since_update = float(candidate_rows["days_since_historical_rating_update"].mean()) if has_rating_counts else float("nan")
 
     lines = [
         "# Historical Analyst Model Comparison",
         "",
         f"- Benchmark: {config.benchmark}",
         f"- Feature panel: {features_path.name}",
-        f"- {HISTORICAL_GRADE_NOTE}",
-        f"- {IMPORTANT_CAVEAT}",
+        f"- {HISTORICAL_RATING_NOTE}",
+        f"- {HISTORICAL_EVENT_NOTE}",
+        f"- {IMPORTANT_SNAPSHOT_CAVEAT}",
         "",
         "## Coverage Summary",
-        f"- Percent of universe with any historical grade event: {coverage_pct_any:.2%}",
-        f"- Percent with a grade event in last 90 days: {coverage_pct_90d:.2%}",
-        f"- Average grade events per ticker: {average_events_per_ticker:.2f}",
-        f"- Most common grade actions: {common_actions}",
-        f"- Tickers with no historical grade coverage: {', '.join(no_coverage_tickers[:20]) if no_coverage_tickers else 'none'}",
+        f"- Percent of universe with historical rating-count data: {coverage_pct_any:.2%}",
+        f"- Percent with at least 5 ratings: {coverage_pct_ge_5:.2%}",
+        f"- Percent with at least 10 ratings: {coverage_pct_ge_10:.2%}",
+        f"- Average days since last rating update: {avg_days_since_update:.2f}",
+        f"- Coverage appears stable enough for backtesting: {coverage_pct_ge_5 >= 0.20}",
     ]
+
     if skipped_models:
-        lines.extend(["", "## Skipped Models", *[f"- {item}" for item in skipped_models]])
+        lines.extend(["", "## Skipped Models", *[f"- {item}" for item in sorted(set(skipped_models))]])
 
     lines.extend(
         [
             "",
-            "## Diagnostics",
-            f"- Historical results limited by sparse analyst event data: {coverage_pct_90d < 0.20}",
-            "",
             "## Test Period Leaders",
             "",
-            _dataframe_to_markdown(comparison_df.head(15).round(6)),
+            _dataframe_to_markdown(comparison_df.head(20).round(6)),
             "",
-            "## Final Answers",
-            f"- Did historical grade events improve over technical_only? {'Yes.' if historical_best_row is not None and technical_best is not None and historical_best_row['test_period_excess_return_vs_spy'] > technical_best['test_period_excess_return_vs_spy'] else 'No.'}",
-            f"- Did historical grade events improve over SPY on the test period? {'Yes.' if historical_best_row is not None and historical_best_row['test_period_excess_return_vs_spy'] > 0 else 'No.'}",
-            f"- Did historical grade events perform better or worse than snapshot analyst models? {'Better.' if historical_best_row is not None and snapshot_best is not None and historical_best_row['test_period_excess_return_vs_spy'] > snapshot_best['test_period_excess_return_vs_spy'] else 'Worse.'}",
-            f"- How much coverage did historical grade data have? {coverage_pct_any:.2%} of the universe had any historical grade history and {coverage_pct_90d:.2%} had an event in the prior 90 days.",
-            f"- Were results limited by sparse analyst event data? {'Yes.' if coverage_pct_90d < 0.20 else 'Not materially.'}",
+            "## Answers",
+            f"- Did historical rating-count models beat SPY on the test period? {'Yes.' if historical_best is not None and historical_best['test_period_excess_return_vs_spy'] > 0 else 'No.'}",
+            f"- Did historical rating-count models beat technical_only? {'Yes.' if historical_best is not None and technical_best is not None and historical_best['test_period_excess_return_vs_spy'] > technical_best['test_period_excess_return_vs_spy'] else 'No.'}",
+            f"- Did historical rating-count models beat snapshot analyst models? {'Yes.' if historical_best is not None and snapshot_best is not None and historical_best['test_period_excess_return_vs_spy'] > snapshot_best['test_period_excess_return_vs_spy'] else 'No.'}",
+            f"- Did sentiment improve historical rating-count models? {'Yes.' if best_by_strategy.get('historical_rating_counts_plus_sentiment') is not None and best_by_strategy.get('historical_rating_counts_model') is not None and best_by_strategy['historical_rating_counts_plus_sentiment']['test_period_excess_return_vs_spy'] > best_by_strategy['historical_rating_counts_model']['test_period_excess_return_vs_spy'] else 'No or inconclusive.'}",
+            f"- How much coverage did grades-historical have? {coverage_pct_any:.2%} of the universe had any dated rating-count snapshot, {coverage_pct_ge_5:.2%} had at least 5 ratings, and {coverage_pct_ge_10:.2%} had at least 10 ratings.",
+            f"- Are results limited by sparse historical analyst data? {'Yes.' if coverage_pct_ge_5 < 0.20 else 'Not materially.'}",
         ]
     )
 
     report_path = config.reports_dir / "historical_analyst_model_comparison.md"
     report_path.write_text("\n".join(lines), encoding="utf-8")
+    print(f"Saved historical analyst comparison table to {config.tables_dir / 'historical_analyst_model_comparison.csv'}")
+    print(f"Saved historical rating-count diagnostics to {config.tables_dir / 'historical_rating_count_diagnostics.csv'}")
     print(f"Saved historical analyst comparison report to {report_path}")
 
 

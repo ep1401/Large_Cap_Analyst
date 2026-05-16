@@ -217,7 +217,7 @@ def build_analyst_snapshot(
             {
                 "date": snapshot_date,
                 "ticker": ticker,
-                "snapshot_mode": "research_current_snapshot",
+                "snapshot_mode": "snapshot_current",
                 "consensus_target": consensus_target,
                 "low_target": low_target,
                 "high_target": high_target,

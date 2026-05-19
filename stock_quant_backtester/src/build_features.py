@@ -278,12 +278,81 @@ def _merge_historical_grade_features(
     return features.merge(historical_features, on=["date", "ticker"], how="left")
 
 
+def _merge_market_level_features(
+    features: pd.DataFrame,
+    market_sentiment_path: str | Path | None,
+    market_regime_path: str | Path | None,
+) -> pd.DataFrame:
+    market_sentiment_df = _load_optional_dataframe(market_sentiment_path, parse_dates=["date"]) if market_sentiment_path else None
+    market_regime_df = _load_optional_dataframe(market_regime_path, parse_dates=["date"]) if market_regime_path else None
+
+    sentiment_defaults = {
+        "market_article_count_1d": 0.0,
+        "market_article_count_7d": 0.0,
+        "market_article_count_30d": 0.0,
+        "market_sentiment_1d": 0.0,
+        "market_sentiment_7d": 0.0,
+        "market_sentiment_30d": 0.0,
+        "market_sentiment_change_7d_vs_30d": 0.0,
+        "market_positive_news_ratio_7d": 0.0,
+        "market_negative_news_ratio_7d": 0.0,
+        "market_strong_negative_news_ratio_7d": 0.0,
+        "market_news_breadth_7d": 0.0,
+        "percent_tickers_positive_sentiment_7d": 0.0,
+        "percent_tickers_negative_sentiment_7d": 0.0,
+        "sentiment_dispersion_7d": 0.0,
+    }
+    regime_defaults = {
+        "spy_return_5d": 0.0,
+        "spy_volatility_21d": 0.0,
+        "spy_volatility_63d": 0.0,
+        "spy_above_sma_50": 0.0,
+        "spy_above_sma_200": 0.0,
+        "spy_drawdown_from_63d_high": 0.0,
+        "spy_drawdown_from_252d_high": 0.0,
+        "qqq_return_21d": np.nan,
+        "qqq_volatility_21d": np.nan,
+        "market_risk_score": 0.0,
+        "normalized_market_risk_score": 0.5,
+        "market_regime_label": "neutral",
+    }
+
+    merged = features.copy()
+    if market_sentiment_df is not None and not market_sentiment_df.empty:
+        market_sentiment_df = market_sentiment_df.copy()
+        market_sentiment_df["date"] = pd.to_datetime(market_sentiment_df["date"])
+        merged = merged.merge(market_sentiment_df, on="date", how="left")
+    else:
+        for column, default in sentiment_defaults.items():
+            merged[column] = default
+
+    if market_regime_df is not None and not market_regime_df.empty:
+        market_regime_df = market_regime_df.copy()
+        market_regime_df["date"] = pd.to_datetime(market_regime_df["date"])
+        merged = merged.merge(market_regime_df, on="date", how="left", suffixes=("", "_market"))
+    else:
+        for column, default in regime_defaults.items():
+            merged[column] = default
+
+    for column, default in {**sentiment_defaults, **regime_defaults}.items():
+        if column not in merged.columns:
+            merged[column] = default
+        if column == "market_regime_label":
+            merged[column] = merged[column].fillna(str(default))
+        else:
+            merged[column] = pd.to_numeric(merged[column], errors="coerce").fillna(default)
+
+    return merged
+
+
 def build_feature_panel(
     prices_path: str | Path,
     universe_path: str | Path,
     output_path: str | Path,
     analyst_path: str | Path | None = None,
     sentiment_path: str | Path | None = None,
+    market_sentiment_path: str | Path | None = None,
+    market_regime_path: str | Path | None = None,
     historical_rating_counts_path: str | Path | None = None,
     historical_grade_events_path: str | Path | None = None,
     historical_rating_count_features_output_path: str | Path | None = None,
@@ -399,6 +468,7 @@ def build_feature_panel(
     )
 
     features = _merge_sentiment(features, sentiment_df)
+    features = _merge_market_level_features(features, market_sentiment_path, market_regime_path)
     features = _merge_analyst_snapshot(features, analyst_df, use_current_snapshot_analyst)
     features = _merge_historical_rating_count_features(
         features,
@@ -465,6 +535,20 @@ def build_feature_panel(
         "strong_negative_news_flag",
         "strong_positive_news_flag",
         "sentiment_data_mode",
+        "market_article_count_1d",
+        "market_article_count_7d",
+        "market_article_count_30d",
+        "market_sentiment_1d",
+        "market_sentiment_7d",
+        "market_sentiment_30d",
+        "market_sentiment_change_7d_vs_30d",
+        "market_positive_news_ratio_7d",
+        "market_negative_news_ratio_7d",
+        "market_strong_negative_news_ratio_7d",
+        "market_news_breadth_7d",
+        "percent_tickers_positive_sentiment_7d",
+        "percent_tickers_negative_sentiment_7d",
+        "sentiment_dispersion_7d",
         "consensus_target",
         "low_target",
         "high_target",
@@ -492,9 +576,22 @@ def build_feature_panel(
         *HISTORICAL_RATING_COUNT_FEATURE_COLUMNS,
         *HISTORICAL_GRADE_FEATURE_COLUMNS,
         "spy_close",
+        "spy_return_21d",
+        "spy_return_63d",
+        "spy_return_5d",
         "spy_sma_50",
         "spy_sma_200",
         "spy_above_sma_200",
+        "spy_volatility_21d",
+        "spy_volatility_63d",
+        "spy_above_sma_50",
+        "spy_drawdown_from_63d_high",
+        "spy_drawdown_from_252d_high",
+        "qqq_return_21d",
+        "qqq_volatility_21d",
+        "market_risk_score",
+        "normalized_market_risk_score",
+        "market_regime_label",
         "future_5d_return",
         "future_21d_return",
         "future_63d_return",
@@ -504,8 +601,14 @@ def build_feature_panel(
         "future_5d_excess_return",
         "future_21d_excess_return",
         "future_63d_excess_return",
+        "future_5d_excess_return_vs_spy",
+        "future_21d_excess_return_vs_spy",
+        "future_63d_excess_return_vs_spy",
         "analyst_data_mode",
     ]
+    features["future_5d_excess_return_vs_spy"] = features["future_5d_excess_return"]
+    features["future_21d_excess_return_vs_spy"] = features["future_21d_excess_return"]
+    features["future_63d_excess_return_vs_spy"] = features["future_63d_excess_return"]
     features = features[final_columns].sort_values(["date", "ticker"]).reset_index(drop=True)
     if start_date is not None:
         features = features.loc[features["date"] >= pd.Timestamp(start_date)].copy()

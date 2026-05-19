@@ -1,0 +1,14 @@
+strategy_name: "final_quant_5d_weight_tuned_low_turnover_no_snapshot"
+holding_period_days: 5
+top_n: 10
+position_sizing: "equal_weight"
+allow_cash: false
+threshold: null
+regime_filter: "none"
+long_short: false
+total_cost_bps: 20.0
+enter_rank: 10
+hold_rank: 20
+max_holding_days: 21
+rebalance_frequency_days: 15
+max_turnover_per_rebalance: null

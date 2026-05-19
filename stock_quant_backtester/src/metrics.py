@@ -58,6 +58,8 @@ def calculate_performance_metrics(returns_df: pd.DataFrame, holding_period_days:
         "average_weekly_excess_return": df["excess_return"].mean(),
         "average_turnover": df["turnover"].mean() if "turnover" in df.columns else 0.0,
         "average_selected_count": df["selected_count"].mean(),
+        "average_exposure": df["exposure"].mean() if "exposure" in df.columns else 1.0,
+        "average_percent_invested": df["percent_invested"].mean() if "percent_invested" in df.columns else (df["exposure"].mean() if "exposure" in df.columns else 1.0),
         "number_of_rebalance_periods": num_periods,
         "number_of_invested_periods": int(invested_periods),
         "periods_per_year": periods_per_year,

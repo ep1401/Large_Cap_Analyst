@@ -1,0 +1,2 @@
+date,source,live_model_value,live_spy_value,simulated_model_value,simulated_spy_value,holdings_count,note
+2026-04-22,initialized_from_forward_test,10000.0,10000.0,9974.03497742154,10438.869623698132,10,initialized_from_forward_test_no_prior_live_tracking

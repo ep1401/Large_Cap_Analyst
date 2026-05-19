@@ -36,6 +36,8 @@ def main() -> None:
         universe_path=config.universe_path,
         analyst_path=config.processed_dir / "analyst_features.csv",
         sentiment_path=sentiment_path,
+        market_sentiment_path=config.processed_dir / "market_sentiment_daily.csv",
+        market_regime_path=config.processed_dir / "market_regime_daily.csv",
         historical_rating_counts_path=config.processed_dir / "historical_analyst_rating_counts.csv",
         historical_grade_events_path=config.processed_dir / "historical_analyst_grade_events.csv",
         historical_rating_count_features_output_path=config.processed_dir / "historical_rating_count_features.csv",
@@ -66,6 +68,32 @@ def main() -> None:
     print(f"Historical rating count max date: {historical_max_date.date() if pd.notna(historical_max_date) else 'n/a'}")
     print(f"Percent rows with sentiment data: {sentiment_rows_with_data:.2%}")
     print(f"Percent rows with historical rating count data: {historical_rows_with_data:.2%}")
+
+    full_window_label = config.full_analysis_window_label
+    if full_window_label != window_label:
+        full_features = build_feature_panel(
+            prices_path=prices_path,
+            universe_path=config.universe_path,
+            analyst_path=config.processed_dir / "analyst_features.csv",
+            sentiment_path=sentiment_path,
+            market_sentiment_path=config.processed_dir / "market_sentiment_daily.csv",
+            market_regime_path=config.processed_dir / "market_regime_daily.csv",
+            historical_rating_counts_path=config.processed_dir / "historical_analyst_rating_counts.csv",
+            historical_grade_events_path=config.processed_dir / "historical_analyst_grade_events.csv",
+            historical_rating_count_features_output_path=config.processed_dir / "historical_rating_count_features.csv",
+            historical_grade_features_output_path=config.processed_dir / "historical_grade_features.csv",
+            output_path=config.final_dir / f"features_panel_{full_window_label}.csv",
+            start_date=config.full_backtest_start_date,
+            end_date=config.full_backtest_end_date,
+            benchmark_ticker=config.benchmark,
+            use_current_snapshot_analyst=str_to_bool(args.use_current_snapshot_analyst),
+        )
+        print(f"Saved full research window feature rows: {len(full_features)}")
+        print(
+            "Full research window date range: "
+            f"{full_features['date'].min().date() if not full_features.empty else 'n/a'} to "
+            f"{full_features['date'].max().date() if not full_features.empty else 'n/a'}"
+        )
 
 
 if __name__ == "__main__":

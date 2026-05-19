@@ -1,0 +1,18 @@
+strategy_name: "ml_ranker_5d_no_snapshot"
+model_type: "hist_gradient_boosting_regression"
+model_path: "models/ml_ranker_no_snapshot.pkl"
+training_window: "2023-01-01 to 2024-12-31"
+validation_window: "2025-01-01 to 2025-12-31"
+forward_window_start: "2026-01-01"
+execution_mode: "low_turnover_hold_band"
+enter_rank: 10
+hold_rank: 20
+top_n: 10
+max_holding_days: 21
+rebalance_frequency_days: 15
+total_cost_bps: 20
+position_sizing: "equal_weight"
+long_short: false
+use_regime_filter: false
+snapshot_fields_allowed: false
+status: "research_candidate"

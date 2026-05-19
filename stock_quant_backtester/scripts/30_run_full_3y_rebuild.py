@@ -48,6 +48,7 @@ SENTIMENT_CAVEAT = (
     "News sentiment results depend on Alpha Vantage coverage, ticker relevance scoring, publication timestamps, and provider sentiment classification."
 )
 BACKTEST_CAVEAT = "This is a historical research backtest, not financial advice and not a live trading system."
+LONG_SHORT_CAVEAT = "Long/short is experimental and currently not recommended."
 DEV_END = pd.Timestamp("2024-12-31")
 TEST_START = pd.Timestamp("2025-01-01")
 VALIDATION_TOLERANCE = 0.02
@@ -502,6 +503,7 @@ def _build_final_family_report(
         f"- {BACKTEST_PERFORMANCE_CAVEAT}",
         f"- {SENTIMENT_CAVEAT}",
         f"- {BACKTEST_CAVEAT}",
+        f"- {LONG_SHORT_CAVEAT}",
         "",
         "## Winners",
         f"- Best historically safer model: {safer.iloc[0]['display_name'] if not safer.empty else 'n/a'}",
@@ -664,6 +666,7 @@ def _build_master_report(
         f"- {BACKTEST_PERFORMANCE_CAVEAT}",
         f"- {SENTIMENT_CAVEAT}",
         f"- {BACKTEST_CAVEAT}",
+        f"- {LONG_SHORT_CAVEAT}",
         "",
         "## Suggested Next Improvements",
         "- Add true point-in-time historical target-price datasets if available.",

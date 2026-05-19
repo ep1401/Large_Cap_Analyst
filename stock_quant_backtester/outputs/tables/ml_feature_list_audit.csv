@@ -1,0 +1,48 @@
+feature_name,feature_group,allowed,leakage_risk,notes
+historical_rating_score,historical_ratings,True,medium,Historical rating-count feature keyed by historical_rating_record_date.
+historical_positive_rating_ratio,historical_ratings,True,medium,Historical rating-count feature keyed by historical_rating_record_date.
+historical_negative_rating_ratio,historical_ratings,True,medium,Historical rating-count feature keyed by historical_rating_record_date.
+historical_rating_score_change_30d,historical_ratings,True,medium,Historical rating-count feature keyed by historical_rating_record_date.
+net_upgrade_score_30d,grade_events,True,medium,Event-derived feature keyed by historical event dates.
+downgrade_count_30d,grade_events,True,medium,Event-derived feature keyed by historical event dates.
+recent_downgrade_flag_30d,grade_events,True,medium,Event-derived feature keyed by historical event dates.
+relevance_weighted_sentiment_7d,sentiment,True,medium,Time-sensitive news or market sentiment input; lag stress-tested.
+relevance_weighted_sentiment_30d,sentiment,True,medium,Time-sensitive news or market sentiment input; lag stress-tested.
+sentiment_change_7d_vs_30d,sentiment,True,medium,Time-sensitive news or market sentiment input; lag stress-tested.
+negative_news_ratio_7d,sentiment,True,medium,Time-sensitive news or market sentiment input; lag stress-tested.
+relative_strength_21d,technical_market,True,low,Price/market-derived trailing feature.
+relative_strength_63d,technical_market,True,low,Price/market-derived trailing feature.
+volatility_21d,technical_market,True,low,Price/market-derived trailing feature.
+beta_to_spy_63d,technical_market,True,low,Price/market-derived trailing feature.
+distance_to_63d_high,technical_market,True,low,Price/market-derived trailing feature.
+breakout_63d,technical_market,True,low,Price/market-derived trailing feature.
+market_sentiment_7d,sentiment,True,medium,Time-sensitive news or market sentiment input; lag stress-tested.
+market_sentiment_30d,sentiment,True,medium,Time-sensitive news or market sentiment input; lag stress-tested.
+market_negative_news_ratio_7d,sentiment,True,medium,Time-sensitive news or market sentiment input; lag stress-tested.
+percent_tickers_positive_sentiment_7d,sentiment,True,medium,Time-sensitive news or market sentiment input; lag stress-tested.
+percent_tickers_negative_sentiment_7d,sentiment,True,medium,Time-sensitive news or market sentiment input; lag stress-tested.
+market_risk_score,technical_market,True,low,Price/market-derived trailing feature.
+spy_return_21d,technical_market,True,low,Price/market-derived trailing feature.
+spy_volatility_21d,technical_market,True,low,Price/market-derived trailing feature.
+spy_drawdown_from_63d_high,technical_market,True,low,Price/market-derived trailing feature.
+spy_above_sma_50,technical_market,True,low,Price/market-derived trailing feature.
+spy_above_sma_200,technical_market,True,low,Price/market-derived trailing feature.
+consensus_upside,forbidden_audit,False,high,Forbidden target/snapshot/forward-return field; not present in the frozen ML feature list.
+low_target_upside,forbidden_audit,False,high,Forbidden target/snapshot/forward-return field; not present in the frozen ML feature list.
+high_target_upside,forbidden_audit,False,high,Forbidden target/snapshot/forward-return field; not present in the frozen ML feature list.
+consensus_target,forbidden_audit,False,high,Forbidden target/snapshot/forward-return field; not present in the frozen ML feature list.
+low_target,forbidden_audit,False,high,Forbidden target/snapshot/forward-return field; not present in the frozen ML feature list.
+high_target,forbidden_audit,False,high,Forbidden target/snapshot/forward-return field; not present in the frozen ML feature list.
+median_target,forbidden_audit,False,high,Forbidden target/snapshot/forward-return field; not present in the frozen ML feature list.
+target_spread,forbidden_audit,False,high,Forbidden target/snapshot/forward-return field; not present in the frozen ML feature list.
+target_revision_7d,forbidden_audit,False,high,Forbidden target/snapshot/forward-return field; not present in the frozen ML feature list.
+target_revision_30d,forbidden_audit,False,high,Forbidden target/snapshot/forward-return field; not present in the frozen ML feature list.
+future_5d_return,forbidden_audit,False,high,Forbidden target/snapshot/forward-return field; not present in the frozen ML feature list.
+future_21d_return,forbidden_audit,False,high,Forbidden target/snapshot/forward-return field; not present in the frozen ML feature list.
+future_63d_return,forbidden_audit,False,high,Forbidden target/snapshot/forward-return field; not present in the frozen ML feature list.
+future_5d_excess_return,forbidden_audit,False,high,Forbidden target/snapshot/forward-return field; not present in the frozen ML feature list.
+future_21d_excess_return,forbidden_audit,False,high,Forbidden target/snapshot/forward-return field; not present in the frozen ML feature list.
+future_63d_excess_return,forbidden_audit,False,high,Forbidden target/snapshot/forward-return field; not present in the frozen ML feature list.
+future_5d_spy_return,forbidden_audit,False,high,Forbidden target/snapshot/forward-return field; not present in the frozen ML feature list.
+future_21d_spy_return,forbidden_audit,False,high,Forbidden target/snapshot/forward-return field; not present in the frozen ML feature list.
+future_63d_spy_return,forbidden_audit,False,high,Forbidden target/snapshot/forward-return field; not present in the frozen ML feature list.

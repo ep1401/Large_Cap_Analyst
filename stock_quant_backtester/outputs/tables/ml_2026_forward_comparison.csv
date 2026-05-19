@@ -1,0 +1,4 @@
+series_name,strategy_name,model_type,total_return,excess_vs_spy,excess_vs_rule_based,max_drawdown,average_turnover,estimated_trading_costs,average_holdings,rebalance_periods
+Frozen ML Ranker,ml_ranker_5d_no_snapshot,hist_gradient_boosting_regression,0.18524921071068867,0.1413622483408754,0.1878457129685347,-0.041270253986595784,1.1333333333333335,0.0136,10.0,6
+Current Rule-Based Low-Turnover Model,final_quant_5d_weight_tuned_low_turnover_no_snapshot,rule_based,-0.002596502257846023,-0.04648346462765929,0.0,-0.1205712171038912,0.8666666666666666,0.010399999999999599,10.0,6
+SPY Buy & Hold,SPY,benchmark,0.043886962369813265,0.0,0.04648346462765929,-0.05862878021687401,0.0,0.0,1.0,6

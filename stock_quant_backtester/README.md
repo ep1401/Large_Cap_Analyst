@@ -45,6 +45,46 @@ cp .env.example .env
 # add API keys
 ```
 
+## Automated Paper Trading
+
+The repo includes a GitHub Actions workflow at [`.github/workflows/paper-trading-daily.yml`](../.github/workflows/paper-trading-daily.yml) for the frozen ML research candidate. It runs on weekdays around `6:30 PM` New York time using GitHub-hosted runners, so no EC2 instance is required.
+
+Required GitHub repository secrets:
+
+- `EODHD_API_KEY`
+- `FMP_API_KEY`
+- `ALPHA_VANTAGE_API_KEY`
+
+Manual run:
+
+1. Open the repository `Actions` tab.
+2. Select `Paper Trading Daily`.
+3. Click `Run workflow`.
+4. Optionally enable `force_refresh`, `dry_run`, or `commit_updates`.
+
+What the workflow does:
+
+- runs the frozen ML no-leakage validations
+- refreshes forward data and rebuilds the latest feature panel unless `dry_run` is selected
+- scores the frozen ML candidate from disk without retraining
+- updates the ML paper-trading portfolio state
+- regenerates the promotion watch, monitoring summaries, dashboard, charts, and current recommendations
+- uploads the latest reports and charts as workflow artifacts
+
+Where to find outputs:
+
+- ML dashboard: `outputs/reports/ml_candidate_dashboard.md`
+- promotion watch: `outputs/reports/ml_promotion_watch.md`
+- current ML holdings: `outputs/tables/current_recommendations_ml_research_candidate.csv`
+- current recommended rule-based holdings: `outputs/tables/current_recommendations_final_strategy.csv`
+- paper-trading state: `data/paper_trading/ml_portfolio_state.csv`
+
+Warnings:
+
+- This workflow is paper trading only, not financial advice.
+- The ML model is frozen and is not retrained inside the workflow.
+- New forward data is used for monitoring only, not for tuning or model selection.
+
 ## Project Layout
 
 ```text

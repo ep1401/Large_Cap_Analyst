@@ -1,0 +1,93 @@
+name: Paper Trading Daily
+
+on:
+  schedule:
+    - cron: "30 22 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      force_refresh:
+        description: "Force refresh upstream market/news/grades data"
+        required: false
+        default: false
+        type: boolean
+      commit_updates:
+        description: "Commit updated paper-trading state and reports back to the repo"
+        required: false
+        default: false
+        type: boolean
+      dry_run:
+        description: "Run without refreshing network data"
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  paper-trading:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r stock_quant_backtester/requirements.txt
+
+      - name: Create .env from secrets
+        run: |
+          cat > stock_quant_backtester/.env <<EOF
+          EODHD_API_KEY=${{ secrets.EODHD_API_KEY }}
+          FMP_API_KEY=${{ secrets.FMP_API_KEY }}
+          ALPHA_VANTAGE_API_KEY=${{ secrets.ALPHA_VANTAGE_API_KEY }}
+          CACHE_ENABLED=true
+          FORCE_REFRESH=false
+          EOF
+
+      - name: Run frozen ML paper-trading pipeline
+        run: |
+          args=()
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.force_refresh }}" == "true" ]]; then
+            args+=("--force-refresh")
+          fi
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.dry_run }}" == "true" ]]; then
+            args+=("--dry-run")
+          fi
+          python stock_quant_backtester/scripts/90_run_daily_paper_trading_pipeline.py "${args[@]}"
+
+      - name: Upload paper-trading artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ml-paper-trading-artifacts
+          path: |
+            stock_quant_backtester/outputs/reports/ml_candidate_dashboard.md
+            stock_quant_backtester/outputs/reports/ml_promotion_watch.md
+            stock_quant_backtester/outputs/reports/paper_trading_report.md
+            stock_quant_backtester/outputs/reports/ml_current_recommendations.md
+            stock_quant_backtester/outputs/tables/current_recommendations_final_strategy.csv
+            stock_quant_backtester/outputs/tables/current_recommendations_ml_research_candidate.csv
+            stock_quant_backtester/outputs/charts/*.png
+            stock_quant_backtester/data/paper_trading/*.csv
+          if-no-files-found: warn
+
+      - name: Commit updated paper-trading state and reports
+        if: github.event_name == 'workflow_dispatch' && inputs.commit_updates == true
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add stock_quant_backtester/data/paper_trading/*.csv \
+                  stock_quant_backtester/outputs/reports/*.md \
+                  stock_quant_backtester/outputs/tables/current_recommendations*.csv \
+                  stock_quant_backtester/outputs/tables/ml_*.csv \
+                  stock_quant_backtester/outputs/charts/ml_*.png \
+                  stock_quant_backtester/outputs/charts/forward_*.png || true
+          git diff --cached --quiet && exit 0
+          git commit -m "Update frozen ML paper-trading outputs"
+          git push origin HEAD

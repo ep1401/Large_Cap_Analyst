@@ -24,6 +24,7 @@ on:
 jobs:
   paper-trading:
     runs-on: ubuntu-latest
+    environment: paper-trading
     defaults:
       run:
         shell: bash
@@ -52,6 +53,10 @@ jobs:
           EOF
 
       - name: Run frozen ML paper-trading pipeline
+        env:
+          ALPHA_VANTAGE_API_KEY: ${{ secrets.ALPHA_VANTAGE_API_KEY }}
+          EODHD_API_KEY: ${{ secrets.EODHD_API_KEY }}
+          FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
         run: |
           args=()
           if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.force_refresh }}" == "true" ]]; then

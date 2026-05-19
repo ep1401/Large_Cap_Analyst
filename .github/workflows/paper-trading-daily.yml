@@ -25,6 +25,10 @@ jobs:
   paper-trading:
     runs-on: ubuntu-latest
     environment: paper-trading
+    env:
+      ALPHA_VANTAGE_API_KEY: ${{ secrets.ALPHA_VANTAGE_API_KEY }}
+      EODHD_API_KEY: ${{ secrets.EODHD_API_KEY }}
+      FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
     defaults:
       run:
         shell: bash
@@ -52,12 +56,37 @@ jobs:
           FORCE_REFRESH=false
           EOF
 
+      - name: Preflight check environment secrets availability
+        env:
+          ALPHA_VANTAGE_API_KEY_PRESENT: ${{ secrets.ALPHA_VANTAGE_API_KEY != '' }}
+          EODHD_API_KEY_PRESENT: ${{ secrets.EODHD_API_KEY != '' }}
+          FMP_API_KEY_PRESENT: ${{ secrets.FMP_API_KEY != '' }}
+        run: |
+          echo "ALPHA_VANTAGE_API_KEY_PRESENT=${ALPHA_VANTAGE_API_KEY_PRESENT}"
+          echo "EODHD_API_KEY_PRESENT=${EODHD_API_KEY_PRESENT}"
+          echo "FMP_API_KEY_PRESENT=${FMP_API_KEY_PRESENT}"
+          if [[ "${ALPHA_VANTAGE_API_KEY_PRESENT}" != "true" || "${EODHD_API_KEY_PRESENT}" != "true" || "${FMP_API_KEY_PRESENT}" != "true" ]]; then
+            echo "Required secrets are not available to this job. Add them to the exact GitHub Environment named 'paper-trading' or convert them to repository-level secrets."
+            exit 1
+          fi
+
       - name: Run frozen ML paper-trading pipeline
         env:
           ALPHA_VANTAGE_API_KEY: ${{ secrets.ALPHA_VANTAGE_API_KEY }}
           EODHD_API_KEY: ${{ secrets.EODHD_API_KEY }}
           FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
         run: |
+          missing_vars=()
+          for var_name in ALPHA_VANTAGE_API_KEY EODHD_API_KEY FMP_API_KEY; do
+            if [[ -z "${!var_name:-}" ]]; then
+              missing_vars+=("${var_name}")
+            fi
+          done
+          if (( ${#missing_vars[@]} > 0 )); then
+            echo "Required environment variables are empty inside the runner shell: ${missing_vars[*]}"
+            echo "GitHub may see the secrets, but they are not reaching the step environment."
+            exit 1
+          fi
           args=()
           if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.force_refresh }}" == "true" ]]; then
             args+=("--force-refresh")

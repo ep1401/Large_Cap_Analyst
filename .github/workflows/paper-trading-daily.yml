@@ -46,6 +46,18 @@ jobs:
       - name: Install dependencies
         run: pip install -r stock_quant_backtester/requirements.txt
 
+      - name: Cache generated paper-trading data
+        uses: actions/cache@v4
+        with:
+          path: |
+            stock_quant_backtester/data/raw
+            stock_quant_backtester/data/processed
+            stock_quant_backtester/data/final
+            stock_quant_backtester/data/paper_trading
+          key: paper-trading-data-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: |
+            paper-trading-data-${{ runner.os }}-
+
       - name: Create .env from secrets
         run: |
           cat > stock_quant_backtester/.env <<EOF

@@ -101,12 +101,21 @@ def _ensure_forward_inputs(runtime: Config, dry_run: bool) -> None:
     forward_path = runtime.final_dir / "features_panel_2026_forward.csv"
     if forward_path.exists():
         return
+    regenerate_cmd = "python stock_quant_backtester/scripts/65_run_2026_forward_test.py"
     if dry_run:
         raise FileNotFoundError(
             "Missing forward feature panel required for dry-run paper trading: "
             f"{_relpath(runtime, forward_path)}. "
-            "Dry-run skips network refresh, so run without --dry-run once to build forward data on a clean checkout."
+            "Dry-run skips network refresh, so regenerate it first with "
+            f"`{regenerate_cmd}` (add `--force-refresh` if you need to bypass caches), "
+            "or run the daily pipeline once without `--dry-run` on a runner that has the required API secrets."
         )
+    raise FileNotFoundError(
+        "Missing forward feature panel required for ML forward validation: "
+        f"{_relpath(runtime, forward_path)}. "
+        "Regenerate it before running the leakage check with "
+        f"`{regenerate_cmd}` (or let this pipeline refresh it automatically before validation)."
+    )
 
 
 def _load_latest_recommendation_snapshot(
@@ -304,13 +313,14 @@ def main() -> None:
     runtime = Config.from_env()
     _ensure_required_env(runtime, dry_run=args.dry_run)
     _ensure_historical_validation_inputs(runtime, dry_run=args.dry_run, force_refresh=args.force_refresh)
+
+    if not args.dry_run:
+        _refresh_forward_data(force_refresh=args.force_refresh)
+
     _ensure_forward_inputs(runtime, dry_run=args.dry_run)
 
     _run_python_script("72_validate_ml_no_leakage.py")
     _run_python_script("74_validate_ml_forward_no_leakage.py")
-
-    if not args.dry_run:
-        _refresh_forward_data(force_refresh=args.force_refresh)
 
     _run_python_script("56_generate_paper_trading_report.py", ["--features-path", str(runtime.final_dir / "features_panel_2026_forward.csv")])
     _run_python_script("80_generate_ml_promotion_watch.py")

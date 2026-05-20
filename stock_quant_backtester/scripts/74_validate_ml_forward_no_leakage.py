@@ -59,7 +59,12 @@ def main() -> None:
 
     features_path = runtime.final_dir / "features_panel_2026_forward.csv"
     if not features_path.exists():
-        failures.append(f"Missing 2026 forward feature panel: {features_path}")
+        failures.append(
+            "Missing 2026 forward feature panel: "
+            f"{features_path}. Regenerate it with "
+            "`python stock_quant_backtester/scripts/65_run_2026_forward_test.py` "
+            "before running the forward no-leakage validation."
+        )
     else:
         features = load_dataframe(features_path, parse_dates=["date"])
         if not features.empty and pd_year_max(features) < 2026:

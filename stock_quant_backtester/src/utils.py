@@ -17,6 +17,8 @@ logging.basicConfig(
 )
 LOGGER = logging.getLogger(__name__)
 
+SENSITIVE_PARAM_KEYS = {"api_key", "api_token", "apikey", "token"}
+
 
 @dataclass
 class RateLimiter:
@@ -45,7 +47,32 @@ def safe_get_json(
     rate_limiter: RateLimiter | None = None,
 ) -> Any:
     """Request JSON data with simple retry handling and rate-limit pacing."""
+    def redact_params(raw_params: dict[str, Any] | None) -> dict[str, Any] | None:
+        if raw_params is None:
+            return None
+        redacted: dict[str, Any] = {}
+        for key, value in raw_params.items():
+            key_text = str(key).lower()
+            if key_text in SENSITIVE_PARAM_KEYS or key_text.endswith("_key"):
+                redacted[key] = "***REDACTED***"
+            else:
+                redacted[key] = value
+        return redacted
+
+    def redact_text(text: str, raw_params: dict[str, Any] | None) -> str:
+        redacted = text
+        if raw_params is None:
+            return redacted
+        for key, value in raw_params.items():
+            key_text = str(key).lower()
+            if key_text in SENSITIVE_PARAM_KEYS or key_text.endswith("_key"):
+                value_text = str(value).strip()
+                if value_text:
+                    redacted = redacted.replace(value_text, "***REDACTED***")
+        return redacted
+
     last_error: Exception | None = None
+    redacted_params = redact_params(params)
     for attempt in range(1, max_retries + 1):
         try:
             if rate_limiter is not None:
@@ -60,11 +87,11 @@ def safe_get_json(
                 attempt,
                 max_retries,
                 url,
-                params,
-                exc,
+                redacted_params,
+                redact_text(str(exc), params),
             )
             time.sleep(retry_sleep_seconds * attempt)
-    detail = f": {last_error}" if last_error is not None else ""
+    detail = f": {redact_text(str(last_error), params)}" if last_error is not None else ""
     raise RuntimeError(f"Failed to fetch JSON from {url}{detail}") from last_error
 
 

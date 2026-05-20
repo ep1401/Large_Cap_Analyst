@@ -47,6 +47,68 @@ def _ensure_required_env(config: Config, dry_run: bool) -> None:
         raise ValueError(f"Missing required environment variables for live refresh: {', '.join(missing)}")
 
 
+def _relpath(runtime: Config, path: Path) -> str:
+    try:
+        return str(path.relative_to(runtime.project_root))
+    except ValueError:
+        return str(path)
+
+
+def _format_missing_paths(runtime: Config, paths: list[Path]) -> str:
+    return ", ".join(_relpath(runtime, path) for path in paths)
+
+
+def _bootstrap_historical_feature_panel(runtime: Config, force_refresh: bool) -> None:
+    refresh_args = ["--force"] if force_refresh else []
+    price_window_args = ["--start-date", runtime.full_backtest_start_date, "--end-date", runtime.full_backtest_end_date]
+    sentiment_window_args = ["--start-date", runtime.full_sentiment_start_date, "--end-date", runtime.full_sentiment_end_date]
+
+    print("Historical research feature panel missing; bootstrapping clean-checkout prerequisites from APIs.")
+    _run_python_script("01_fetch_prices.py", [*price_window_args, *refresh_args])
+    _run_python_script("02_fetch_analyst_data.py", refresh_args)
+    _run_python_script("16_fetch_fmp_historical_grades.py", [*price_window_args, *refresh_args])
+    _run_python_script("12_fetch_alpha_vantage_news.py", [*sentiment_window_args, *refresh_args])
+    _run_python_script("13_build_news_sentiment.py", [*sentiment_window_args, "--force"])
+    _run_python_script("68_build_market_sentiment_features.py")
+    _run_python_script("69_build_market_regime_features.py")
+    _run_python_script("04_build_features.py", price_window_args)
+
+
+def _ensure_historical_validation_inputs(runtime: Config, dry_run: bool, force_refresh: bool) -> None:
+    candidate_paths = [
+        runtime.final_dir / f"features_panel_{runtime.full_analysis_window_label}.csv",
+        runtime.final_dir / "features_panel.csv",
+    ]
+    if any(path.exists() for path in candidate_paths):
+        return
+
+    if dry_run:
+        raise FileNotFoundError(
+            "Missing historical feature panel required for ML leakage validation: "
+            f"{_format_missing_paths(runtime, candidate_paths)}. "
+            "Dry-run uses existing local datasets only. Run without --dry-run once so the pipeline can fetch prices/news/grades and build the feature panel on a clean checkout."
+        )
+
+    _bootstrap_historical_feature_panel(runtime, force_refresh=force_refresh)
+    if not any(path.exists() for path in candidate_paths):
+        raise FileNotFoundError(
+            "Historical feature panel bootstrap completed, but the expected outputs are still missing: "
+            f"{_format_missing_paths(runtime, candidate_paths)}."
+        )
+
+
+def _ensure_forward_inputs(runtime: Config, dry_run: bool) -> None:
+    forward_path = runtime.final_dir / "features_panel_2026_forward.csv"
+    if forward_path.exists():
+        return
+    if dry_run:
+        raise FileNotFoundError(
+            "Missing forward feature panel required for dry-run paper trading: "
+            f"{_relpath(runtime, forward_path)}. "
+            "Dry-run skips network refresh, so run without --dry-run once to build forward data on a clean checkout."
+        )
+
+
 def _load_latest_recommendation_snapshot(
     runtime: Config,
     candidate,
@@ -241,6 +303,8 @@ def main() -> None:
 
     runtime = Config.from_env()
     _ensure_required_env(runtime, dry_run=args.dry_run)
+    _ensure_historical_validation_inputs(runtime, dry_run=args.dry_run, force_refresh=args.force_refresh)
+    _ensure_forward_inputs(runtime, dry_run=args.dry_run)
 
     _run_python_script("72_validate_ml_no_leakage.py")
     _run_python_script("74_validate_ml_forward_no_leakage.py")

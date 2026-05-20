@@ -13,10 +13,10 @@ from src.no_snapshot_research import (
     build_final_quant_5d_definition,
     build_weight_tuned_final_quant_5d_definition,
     final_5d_weight_components,
-    normalize_final_5d_weights,
     run_custom_weekly_backtest,
     select_rebalance_dates,
 )
+from src.promoted_weights import load_promoted_final_5d_tuned_weights
 from src.scoring import get_future_return_columns
 from src.scoring import strategy_display_name
 from src.utils import load_dataframe
@@ -163,17 +163,7 @@ def save_recommended_strategy_config(config: RecommendedStrategyConfig, project_
 
 
 def load_promoted_tuned_weights(project_root: Path | None = None) -> dict[str, float]:
-    root = project_root or Path(__file__).resolve().parents[1]
-    path = root / "outputs" / "tables" / "weight_search_5d_no_snapshot.csv"
-    if not path.exists():
-        raise FileNotFoundError(f"Missing tuned weight search results: {path}")
-    df = load_dataframe(path)
-    promoted = df.loc[df["promoted"].fillna(False).astype(bool)].copy()
-    if promoted.empty:
-        raise ValueError("No promoted tuned weights are available.")
-    row = promoted.iloc[0]
-    weights = {component: float(row[f"weight_{component}"]) for component in FINAL_5D_WEIGHT_COMPONENT_ORDER}
-    return normalize_final_5d_weights(weights)
+    return load_promoted_final_5d_tuned_weights(project_root)
 
 
 def build_strategy_definition_from_config(recommended: RecommendedStrategyConfig, project_root: Path | None = None):

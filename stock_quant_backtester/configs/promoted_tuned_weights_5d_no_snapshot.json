@@ -1,0 +1,21 @@
+{
+  "strategy_name": "final_quant_5d_weight_tuned_no_snapshot",
+  "candidate_id": "candidate_0001",
+  "holding_period_days": 5,
+  "selection_window_end": "2025-12-31",
+  "selection_note": "Frozen promoted tuned weights for 2026 forward validation and daily paper trading. Do not retune on forward data.",
+  "weights": {
+    "historical_rating_score": 0.1849112426035503,
+    "historical_positive_rating_ratio": 0.1109467455621301,
+    "historical_negative_rating_ratio": -0.1109467455621301,
+    "net_upgrade_score_30d": 0.1863905325443788,
+    "downgrade_count_30d": -0.1109467455621301,
+    "relative_strength_21d": 0.1109467455621301,
+    "relevance_weighted_sentiment_7d": 0.0739644970414201,
+    "sentiment_change_7d_vs_30d": 0.03698224852071,
+    "volatility_21d": -0.03698224852071,
+    "breakout_63d": 0.03698224852071,
+    "negative_news_flag": -0.0,
+    "recent_downgrade_flag": -0.0
+  }
+}

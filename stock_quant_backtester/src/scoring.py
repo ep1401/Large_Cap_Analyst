@@ -7,6 +7,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from src.promoted_weights import load_promoted_final_5d_tuned_weights as load_frozen_promoted_final_5d_tuned_weights
+
 
 VALID_HOLDING_PERIODS = {5, 21, 63}
 FUTURE_RETURN_COLUMN_MAP = {
@@ -750,24 +752,10 @@ FINAL_5D_TUNED_WEIGHT_COLUMNS = [
 
 @lru_cache(maxsize=1)
 def _load_promoted_final_5d_tuned_weights() -> dict[str, float]:
-    weights_path = Path(__file__).resolve().parents[1] / "outputs" / "tables" / "weight_search_5d_no_snapshot.csv"
-    if not weights_path.exists():
-        raise ValueError(
-            "Tuned 5D weight file is missing. Run scripts/49_weight_search_5d_no_snapshot.py before using "
-            "final_quant_5d_weight_tuned_no_snapshot."
-        )
-    weights_df = pd.read_csv(weights_path)
-    promoted = weights_df.loc[weights_df["promoted"].fillna(False).astype(bool)].copy()
-    if promoted.empty:
-        raise ValueError(
-            "No promoted tuned 5D model is available in outputs/tables/weight_search_5d_no_snapshot.csv."
-        )
-    row = promoted.iloc[0]
-    weights = {column: float(row[f"weight_{column}"]) for column in FINAL_5D_TUNED_WEIGHT_COLUMNS}
-    abs_sum = sum(abs(value) for value in weights.values())
-    if abs_sum <= 0:
-        raise ValueError("Promoted tuned 5D model has zero total absolute weight.")
-    return {column: value / abs_sum for column, value in weights.items()}
+    try:
+        return load_frozen_promoted_final_5d_tuned_weights(Path(__file__).resolve().parents[1])
+    except FileNotFoundError as exc:
+        raise ValueError(str(exc)) from exc
 
 
 def _resistance_columns(resistance_window: int) -> tuple[str, str]:

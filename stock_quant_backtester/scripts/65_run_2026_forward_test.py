@@ -32,6 +32,7 @@ from src.fetch_fmp_historical_grades import build_historical_grade_datasets
 from src.fetch_prices import fetch_eodhd_prices
 from src.metrics import calculate_performance_metrics
 from src.no_snapshot_research import dataframe_to_markdown, summarize_backtest
+from src.promoted_weights import assert_promoted_final_5d_tuned_weights_available
 from src.recommended_strategy import (
     config_path,
     load_recommended_strategy_config,
@@ -103,6 +104,7 @@ def _validate_recommended_strategy(config: Config):
     offending = sorted(strategy_score_fields(recommended.strategy_name) & SNAPSHOT_FIELD_COLUMNS)
     if offending:
         raise ValueError(f"Recommended strategy uses snapshot fields: {', '.join(offending)}")
+    assert_promoted_final_5d_tuned_weights_available(config.project_root)
     return recommended
 
 
